@@ -57,7 +57,7 @@ function LoginForm() {
     try {
       const supabase = createClient();
       await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+        redirectTo: `${window.location.origin}/SecApp/auth/callback?next=/reset-password`,
       });
       setResetSent(true);
     } catch (err) {
@@ -76,7 +76,7 @@ function LoginForm() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${window.location.origin}/SecApp/auth/callback`,
         },
       });
       if (error) {
