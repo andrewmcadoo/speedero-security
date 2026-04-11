@@ -5,10 +5,18 @@ import { NextResponse } from "next/server";
 // Keep in sync with next.config.ts `basePath`.
 const BASE_PATH = "/SecApp";
 
+/** Derive the public-facing origin from reverse-proxy headers. */
+function getPublicOrigin(request: Request): string {
+  const proto = request.headers.get("x-forwarded-proto") || "https";
+  const host = request.headers.get("host") || "localhost:3000";
+  return `${proto}://${host}`;
+}
+
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/dashboard";
+  const origin = getPublicOrigin(request);
 
   if (code) {
     const supabase = await createClient();

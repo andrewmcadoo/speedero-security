@@ -125,6 +125,58 @@ export async function editUser(
   return { success: true };
 }
 
+export async function resetUserPassword(
+  _prev: { error?: string; success?: boolean } | null,
+  formData: FormData
+) {
+  const supabase = await createClient();
+  const profile = await getProfile(supabase);
+  if (!profile || profile.role !== "management") {
+    return { error: "Unauthorized" };
+  }
+
+  const userId = formData.get("userId") as string;
+  const password = formData.get("password") as string;
+
+  if (!userId) {
+    return { error: "User ID is required" };
+  }
+  if (!password || password.length < 6) {
+    return { error: "Password must be at least 6 characters" };
+  }
+
+  const isSelf = userId === profile.id;
+
+  if (isSelf) {
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) {
+      return { error: error.message };
+    }
+  } else {
+    const admin = createAdminClient();
+
+    const { data: existingUser, error: fetchError } =
+      await admin.auth.admin.getUserById(userId);
+    if (fetchError || !existingUser?.user) {
+      return { error: "User not found" };
+    }
+
+    const { error } = await admin.auth.admin.updateUserById(userId, {
+      password,
+      user_metadata: {
+        ...existingUser.user.user_metadata,
+        must_change_password: true,
+      },
+    });
+    if (error) {
+      return { error: error.message };
+    }
+  }
+
+  revalidatePath("/admin/users");
+  return { success: true };
+}
+
 export async function deleteUser(
   _prev: { error?: string; success?: boolean } | null,
   formData: FormData

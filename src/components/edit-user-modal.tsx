@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { editUser, deleteUser } from "@/app/admin/users/actions";
+import { editUser, deleteUser, resetUserPassword } from "@/app/admin/users/actions";
 
 interface EditUserModalProps {
   user: { id: string; full_name: string; email: string; role: "epo" | "management" };
@@ -17,6 +17,7 @@ export function EditUserModal({
   onClose,
 }: EditUserModalProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
 
   const [editState, editAction, editPending] = useActionState(
     async (
@@ -24,6 +25,18 @@ export function EditUserModal({
       formData: FormData
     ) => {
       const result = await editUser(prev, formData);
+      if (result.success) onClose();
+      return result;
+    },
+    null
+  );
+
+  const [resetState, resetAction, resetPending] = useActionState(
+    async (
+      prev: { error?: string; success?: boolean } | null,
+      formData: FormData
+    ) => {
+      const result = await resetUserPassword(prev, formData);
       if (result.success) onClose();
       return result;
     },
@@ -114,8 +127,65 @@ export function EditUserModal({
           </div>
         </form>
 
+        <div className="mt-6 border-t border-gray-800 pt-4">
+          {!showResetPassword ? (
+            <button
+              type="button"
+              onClick={() => setShowResetPassword(true)}
+              className="text-sm text-amber-400 transition-colors hover:text-amber-300"
+            >
+              {isSelf ? "Change password" : "Reset password"}
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-gray-400">
+                {isSelf
+                  ? "Set a new password. It will take effect on your next sign-in."
+                  : "Set a temporary password. The user will be required to change it on their next login."}
+              </p>
+              <form action={resetAction} className="space-y-2">
+                <input type="hidden" name="userId" value={user.id} />
+                <input
+                  name="password"
+                  type="password"
+                  required
+                  minLength={6}
+                  placeholder={isSelf ? "New password (6+ chars)" : "Temporary password (6+ chars)"}
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:border-amber-500 focus:outline-none"
+                />
+                {resetState?.error && (
+                  <p className="text-xs text-red-400">{resetState.error}</p>
+                )}
+                {resetState?.success && (
+                  <p className="text-xs text-green-400">
+                    {isSelf ? "Password changed successfully" : "Password reset successfully"}
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={resetPending}
+                    className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-700 disabled:opacity-50"
+                  >
+                    {resetPending
+                      ? (isSelf ? "Changing..." : "Resetting...")
+                      : (isSelf ? "Change Password" : "Reset Password")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowResetPassword(false)}
+                    className="rounded-lg px-4 py-2 text-sm text-gray-400 transition-colors hover:text-gray-200"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+
         {!isSelf && (
-          <div className="mt-6 border-t border-gray-800 pt-4">
+          <div className="mt-4 border-t border-gray-800 pt-4">
             {!confirmDelete ? (
               <button
                 type="button"

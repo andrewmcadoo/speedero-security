@@ -1,5 +1,7 @@
 # Clipper Server Reference
 
+**Always let AJ run `bun run dev` and review changes locally before pushing to Clipper and building on the server.**
+
 ## Server Details
 
 | Property | Value |
@@ -8,7 +10,7 @@
 | **IP** | 54.245.24.178 |
 | **Role** | Primary navdata + chartdata server |
 | **OS** | SLES 15-SP7 (SUSE Linux Enterprise Server) |
-| **Primary User** | `ec2-user` |
+| **Primary User** | `andrew` |
 | **SSH** | `ssh clipper` (uses ~/.ssh/clipper_ed25519) |
 | **Data Path** | `/data/` |
 | **Apache** | Port 80 (no TLS configured yet) |
