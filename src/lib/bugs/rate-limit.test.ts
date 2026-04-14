@@ -3,7 +3,7 @@ import { createRateLimiter } from "./rate-limit";
 
 describe("createRateLimiter", () => {
   test("allows up to max calls within window", () => {
-    let current = 0;
+    const current = 0;
     const limiter = createRateLimiter({ max: 5, windowMs: 3600_000, now: () => current });
     for (let i = 0; i < 5; i++) {
       expect(limiter.check("aj@example.com").allowed).toBe(true);
@@ -11,7 +11,7 @@ describe("createRateLimiter", () => {
   });
 
   test("rejects the max+1 call within window", () => {
-    let current = 0;
+    const current = 0;
     const limiter = createRateLimiter({ max: 5, windowMs: 3600_000, now: () => current });
     for (let i = 0; i < 5; i++) limiter.check("aj@example.com");
     const result = limiter.check("aj@example.com");
@@ -28,7 +28,7 @@ describe("createRateLimiter", () => {
   });
 
   test("tracks keys independently", () => {
-    let current = 0;
+    const current = 0;
     const limiter = createRateLimiter({ max: 5, windowMs: 3600_000, now: () => current });
     for (let i = 0; i < 5; i++) limiter.check("aj@example.com");
     expect(limiter.check("other@example.com").allowed).toBe(true);
