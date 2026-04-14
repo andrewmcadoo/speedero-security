@@ -6,6 +6,7 @@ import { statusBorderColor } from "./status-badge";
 import { CoverageBadge } from "./coverage-badge";
 import { DETAIL_LEVEL_LABELS } from "@/lib/detail-levels";
 import { getEpoColor } from "@/lib/epo-colors";
+import { TravelDetailsSection } from "./travel-details-section";
 
 const labelClass = "text-[10px] text-gray-500 mb-0.5";
 
@@ -141,6 +142,7 @@ export function ScheduleDetailCard({ entry }: { entry: DashboardEntry }) {
               </div>
             </div>
           )}
+          {entry.travelLeg && <TravelDetailsSection leg={entry.travelLeg} />}
         </div>
       )}
     </div>
