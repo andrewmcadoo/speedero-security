@@ -65,8 +65,14 @@ export function filterRollingWindow(
 
 /**
  * Check if a date string is today.
+ *
+ * When `todayISO` is supplied, compares by string — the caller is assumed
+ * to have resolved "today" in the authoritative timezone (see
+ * `getAnchorDates`). When omitted, falls back to host-local calendar
+ * comparison, which is timezone-sensitive.
  */
-export function isToday(dateStr: string): boolean {
+export function isToday(dateStr: string, todayISO?: string): boolean {
+  if (todayISO) return dateStr === todayISO;
   const today = new Date();
   const date = new Date(dateStr + "T00:00:00");
   return (
@@ -77,23 +83,29 @@ export function isToday(dateStr: string): boolean {
 }
 
 /**
- * Format a date string for display: "TODAY", "TOMORROW", or "WEEKDAY · Month Day"
+ * Format a date string for display. Requires explicit today/tomorrow
+ * anchors (resolved via `getAnchorDates` on the server) so SSR and
+ * hydration produce identical output.
+ *
+ *  - "TODAY · Month Day"    when dateStr === todayISO
+ *  - "TOMORROW · Month Day" when dateStr === tomorrowISO
+ *  - "WEEKDAY · Month Day"  otherwise
  */
-export function formatDateHeader(dateStr: string): string {
+export function formatDateHeader(
+  dateStr: string,
+  todayISO: string,
+  tomorrowISO: string
+): string {
   const date = new Date(dateStr + "T00:00:00");
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  if (date.getTime() === today.getTime()) return "TODAY";
-  if (date.getTime() === tomorrow.getTime()) return "TOMORROW";
-
-  const weekday = date.toLocaleDateString("en-US", { weekday: "long" });
   const month = date.toLocaleDateString("en-US", { month: "long" });
   const day = date.getDate();
-  return `${weekday.toUpperCase()} · ${month} ${day}`;
+  const monthDay = `${month} ${day}`;
+
+  if (dateStr === todayISO) return `TODAY · ${monthDay}`;
+  if (dateStr === tomorrowISO) return `TOMORROW · ${monthDay}`;
+
+  const weekday = date.toLocaleDateString("en-US", { weekday: "long" });
+  return `${weekday.toUpperCase()} · ${monthDay}`;
 }
 
 /**
