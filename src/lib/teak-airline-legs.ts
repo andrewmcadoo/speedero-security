@@ -92,3 +92,21 @@ export function rowToTravelLeg(
     companionReturnFlight: cell(row, 7),
   };
 }
+
+/**
+ * Build a Map from ISO date → TravelLeg given the raw 2D value grid
+ * from `spreadsheets.values.get`. The first row is treated as a header
+ * and skipped. Rows with empty/malformed date columns are skipped.
+ * If duplicate dates appear, last wins.
+ */
+export function buildTravelLegsMap(
+  rows: readonly (readonly string[])[],
+  now: Date = new Date()
+): Map<string, TravelLeg> {
+  const map = new Map<string, TravelLeg>();
+  for (let i = 1; i < rows.length; i++) {
+    const leg = rowToTravelLeg(rows[i], now);
+    if (leg) map.set(leg.date, leg);
+  }
+  return map;
+}

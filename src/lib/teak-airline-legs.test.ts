@@ -123,3 +123,40 @@ describe("rowToTravelLeg", () => {
     expect(leg?.teakFlight).toBe("");
   });
 });
+
+import { buildTravelLegsMap } from "./teak-airline-legs";
+
+describe("buildTravelLegsMap", () => {
+  const refDate = new Date(2026, 3, 1);
+
+  test("skips the header row and separator rows", () => {
+    const rows = [
+      ["", "Pick up or Drop off", "Location", "Time", "Companion",
+        "Companion Pre Position Flight", "Teak Flight", "Companion Return Flight"],
+      ["27-Mar", "Pick up", "L.O.", "14:45", "Hayk",
+        "AS562 BUR-PDX 7:00-9:31", "AS559 PDX-BUR 17:57-20:19", "—"],
+      ["", "", "", "", "", "", "", ""],
+      ["1-Apr", "Pick up", "BH Airbnb", "BH Airbnb", "Hayk",
+        "—", "AS1355 LAX-PDX 11:03-13:37", "DL2459 PDX-LAX 19:58-22:34"],
+    ];
+    const map = buildTravelLegsMap(rows, refDate);
+    expect(map.size).toBe(2);
+    expect(map.get("2026-03-27")?.action).toBe("Pick up");
+    expect(map.get("2026-04-01")?.location).toBe("BH Airbnb");
+  });
+
+  test("returns empty map for empty input", () => {
+    expect(buildTravelLegsMap([], refDate).size).toBe(0);
+  });
+
+  test("later rows with the same date override earlier rows", () => {
+    const rows = [
+      ["", "Pick up or Drop off", "Location", "Time", "Companion", "", "", ""],
+      ["9-Mar", "Pick up", "Old", "10:00", "Hayk", "", "", ""],
+      ["9-Mar", "Drop off", "New", "11:00", "Hayk", "", "", ""],
+    ];
+    const map = buildTravelLegsMap(rows, refDate);
+    expect(map.size).toBe(1);
+    expect(map.get("2026-03-09")?.location).toBe("New");
+  });
+});
