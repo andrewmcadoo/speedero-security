@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, getAssignmentsForUser, getDateSettings, getAllAssignmentsWithProfiles, getAllEpos } from "@/lib/supabase/queries";
-import { fetchSchedule } from "@/lib/google-sheets";
+import { fetchSchedule, fetchTravelLegs } from "@/lib/google-sheets";
 import type { ScheduleEntry, DashboardEntry, DetailLevel } from "@/types/schedule";
 import { isThisWeek, isNextWeek } from "@/lib/schedule-utils";
 import { EpoDashboard } from "./epo-dashboard";
@@ -92,13 +92,15 @@ export default async function DashboardPage() {
     );
   }
 
-  // EPO view: full schedule with assigned dates info
-  const [assignmentsRaw, myAssignments] = await Promise.all([
+  // EPO view: full schedule with assigned dates info + travel details
+  const [assignmentsRaw, myAssignments, travelLegsByDate] = await Promise.all([
     getAllAssignmentsWithProfiles(supabase),
     getAssignmentsForUser(supabase, profile.id),
+    fetchTravelLegs(),
   ]);
 
   const assignedDates = myAssignments.map((a: { date: string }) => a.date);
+  const assignedDateSet = new Set(assignedDates);
 
   // Group all assignments by date (same logic as management)
   const assignmentsByDate = new Map<
@@ -124,6 +126,10 @@ export default async function DashboardPage() {
     isPast: s.date < today,
     isThisWeek: isThisWeek(s.date),
     isNextWeek: isNextWeek(s.date),
+    // Only attach travelLeg when this EPO is assigned to this date.
+    travelLeg: assignedDateSet.has(s.date)
+      ? travelLegsByDate.get(s.date)
+      : undefined,
   }));
 
   return (
