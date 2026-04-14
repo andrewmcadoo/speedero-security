@@ -3,7 +3,7 @@ import type { DetailLevel } from "@/types/schedule";
 export const DETAIL_LEVEL_LABELS: Record<DetailLevel, string> = {
   none: "None",
   single: "Single",
-  dual_day: "Dual Day",
+  dual_day: "Dual (Day Only)",
   dual: "Dual",
 };
 
