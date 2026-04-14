@@ -5,6 +5,7 @@ import { AddUserForm } from "@/components/add-user-form";
 import { UserRow } from "@/components/user-row";
 import { AutoRefresh } from "@/components/auto-refresh";
 import Link from "next/link";
+import { ReportBugButton } from "@/components/report-bug-button";
 
 export default async function AdminUsersPage() {
   const supabase = await createClient();
@@ -29,10 +30,15 @@ export default async function AdminUsersPage() {
         >
           ← Back to Dashboard
         </Link>
-        <h1 className="text-xl font-bold">User Management</h1>
-        <p className="text-sm text-gray-400">
-          {users?.length ?? 0} users
-        </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-xl font-bold">User Management</h1>
+            <p className="text-sm text-gray-400">
+              {users?.length ?? 0} users
+            </p>
+          </div>
+          <ReportBugButton />
+        </div>
       </header>
 
       <div className="mb-4">

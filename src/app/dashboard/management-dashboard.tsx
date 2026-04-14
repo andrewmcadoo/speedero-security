@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { DashboardEntry } from "@/types/schedule";
 import { SignOutButton } from "@/components/sign-out-button";
+import { ReportBugButton } from "@/components/report-bug-button";
 import { DateHeader } from "@/components/date-header";
 import { ManagementCard } from "@/components/management-card";
 import {
@@ -68,6 +69,7 @@ export function ManagementDashboard({
           >
             Manage Users
           </Link>
+          <ReportBugButton />
           <SignOutButton />
         </div>
       </header>
