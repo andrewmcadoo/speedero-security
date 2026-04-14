@@ -59,11 +59,20 @@ export async function getDateSettings(supabase: SupabaseClient) {
   return data ?? [];
 }
 
-export async function getAllEpos(supabase: SupabaseClient) {
+export async function getAllEpos(
+  supabase: SupabaseClient,
+  includeSelfId?: string
+) {
+  // Returns all EPOs, plus the given profile id if provided. This lets a
+  // management user self-assign without exposing other managers in the
+  // assignment dropdown.
+  const filter = includeSelfId
+    ? `role.eq.epo,id.eq.${includeSelfId}`
+    : `role.eq.epo`;
   const { data } = await supabase
     .from("profiles")
     .select("id, full_name, email")
-    .eq("role", "epo")
+    .or(filter)
     .order("full_name");
   return data ?? [];
 }

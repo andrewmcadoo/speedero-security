@@ -48,7 +48,7 @@ export default async function DashboardPage() {
   if (isManagement) {
     const [assignmentsRaw, epos] = await Promise.all([
       getAllAssignmentsWithProfiles(supabase),
-      getAllEpos(supabase),
+      getAllEpos(supabase, profile.id),
     ]);
 
     // Group assignments by date
