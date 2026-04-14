@@ -1,0 +1,84 @@
+name: Deploy to Clipper
+
+on:
+  push:
+    branches: [clipper]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-clipper
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build on Linux, ship to Clipper
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - name: Install deps
+        run: bun install --frozen-lockfile
+
+      - name: Test
+        run: bun test
+
+      - name: Build (Next.js standalone)
+        env:
+          NEXT_PUBLIC_BASE_PATH: /SecApp
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: bun run build
+
+      - name: Assemble standalone bundle
+        run: |
+          cp -r .next/static .next/standalone/.next/static
+          cp -r public .next/standalone/public
+          tar czf deploy.tar.gz -C .next/standalone .
+          ls -lh deploy.tar.gz
+
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.CLIPPER_SSH_KEY }}
+          HOST_KEY: ${{ secrets.CLIPPER_HOST_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$HOST_KEY" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Deploy
+        run: |
+          set -euo pipefail
+          TS=$(date -u +%Y%m%d-%H%M%S)
+          RELEASE=/data/SecApp/releases/$TS
+          SSH_OPTS="-i $HOME/.ssh/deploy_key -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+          HOST="andrew@clipper.speedero.com"
+
+          ssh $SSH_OPTS "$HOST" "mkdir -p $RELEASE"
+          scp $SSH_OPTS deploy.tar.gz "$HOST:/tmp/deploy-$TS.tar.gz"
+          ssh $SSH_OPTS "$HOST" "tar xzf /tmp/deploy-$TS.tar.gz -C $RELEASE && rm /tmp/deploy-$TS.tar.gz"
+          ssh $SSH_OPTS "$HOST" "ln -s /data/SecApp/shared/.env.production $RELEASE/.env.production"
+          ssh $SSH_OPTS "$HOST" "ln -sfn $RELEASE /data/SecApp/current.new && mv -Tf /data/SecApp/current.new /data/SecApp/current"
+          ssh $SSH_OPTS "$HOST" "sudo -n systemctl restart speedero-security"
+          ssh $SSH_OPTS "$HOST" "cd /data/SecApp/releases && ls -1t | tail -n +6 | xargs -r rm -rf"
+
+          echo "release=$RELEASE" >> $GITHUB_STEP_SUMMARY
+          echo "commit=${GITHUB_SHA::12}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Smoke check
+        run: |
+          sleep 5
+          STATUS=$(curl -sS -o /dev/null -w '%{http_code}' -L --max-time 10 https://clipper.speedero.com/SecApp/login)
+          echo "GET /SecApp/login → $STATUS"
+          case "$STATUS" in
+            200|302|307) exit 0 ;;
+            *) exit 1 ;;
+          esac

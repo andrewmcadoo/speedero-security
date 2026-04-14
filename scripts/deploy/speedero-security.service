@@ -1,5 +1,5 @@
 [Unit]
-Description=Speedero Security (Next.js, basePath /SecApp)
+Description=Speedero Security (Next.js standalone, basePath /SecApp)
 After=network-online.target
 Wants=network-online.target
 
@@ -12,8 +12,8 @@ EnvironmentFile=/data/SecApp/shared/.env.production
 Environment=NODE_ENV=production
 Environment=PORT=3000
 Environment=HOSTNAME=127.0.0.1
-Environment=NODE_OPTIONS=--max-old-space-size=1024
-ExecStart=/usr/bin/node /data/SecApp/current/node_modules/next/dist/bin/next start -H 127.0.0.1 -p 3000
+Environment=NODE_OPTIONS=--max-old-space-size=512
+ExecStart=/usr/bin/node /data/SecApp/current/server.js
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
