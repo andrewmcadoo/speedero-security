@@ -7,6 +7,7 @@ import { CoverageBadge } from "./coverage-badge";
 import { DETAIL_LEVEL_LABELS } from "@/lib/detail-levels";
 import { getEpoColor } from "@/lib/epo-colors";
 import { TravelDetailsSection } from "./travel-details-section";
+import { FlightDetailsSection } from "./flight-details-section";
 
 const labelClass = "text-[10px] text-gray-500 mb-0.5";
 
@@ -92,30 +93,7 @@ export function ScheduleDetailCard({ entry }: { entry: DashboardEntry }) {
             <ReadOnlyField label="LODGING" value={entry.lodging} />
           </div>
 
-          {!!(entry.departure.airport || entry.departure.time || entry.arrival.airport || entry.arrival.time) && (
-            <div className="grid grid-cols-2 gap-2 rounded-md bg-gray-950/50 p-2.5">
-              <div className="space-y-1.5">
-                <div className="text-[10px] font-medium text-amber-400">DEPARTURE</div>
-                <ReadOnlyField label="AIRPORT" value={entry.departure.airport} />
-                <ReadOnlyField label="FBO" value={entry.departure.fbo} />
-                <ReadOnlyField label="WHEELS UP" value={entry.departure.time} />
-              </div>
-              <div className="space-y-1.5">
-                <div className="text-[10px] font-medium text-amber-400">ARRIVAL</div>
-                <ReadOnlyField label="AIRPORT" value={entry.arrival.airport} />
-                <ReadOnlyField label="FBO" value={entry.arrival.fbo} />
-                {entry.arrival.time ? (
-                  <div>
-                    <div className="text-[10px] text-gray-500">WHEELS DOWN</div>
-                    <div className="text-xs text-gray-100">
-                      {entry.arrival.time}
-                      <span className="ml-1 text-[10px] text-gray-500">(local)</span>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          )}
+          <FlightDetailsSection entry={entry} />
 
           <div>
             <div className={labelClass}>DETAIL</div>
