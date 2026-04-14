@@ -3,9 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import { formatIssue } from "@/lib/bugs/format-issue";
 import { createRateLimiter } from "@/lib/bugs/rate-limit";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
 const DESCRIPTION_MAX = 5000;
 const REPO = "andrewmcadoo/speedero-security";
 const GITHUB_API = `https://api.github.com/repos/${REPO}/issues`;
+const GITHUB_TIMEOUT_MS = 10_000;
 
 // Module-scoped so it persists across requests in the same server instance.
 // Note: on serverless (Vercel), each warm instance has its own limiter, so
@@ -19,7 +23,7 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user?.email) {
+  if (!user?.id || !user.email) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
@@ -31,8 +35,8 @@ export async function POST(request: Request) {
   }
 
   const description =
-    typeof body === "object" && body !== null && "description" in body
-      ? (body as { description: unknown }).description
+    typeof body === "object" && body !== null
+      ? (body as Record<string, unknown>).description
       : undefined;
 
   if (typeof description !== "string" || description.trim().length === 0) {
@@ -49,7 +53,17 @@ export async function POST(request: Request) {
     );
   }
 
-  const rate = limiter.check(user.email);
+  const token = process.env.GITHUB_BUGS_TOKEN;
+  if (!token) {
+    console.error("GITHUB_BUGS_TOKEN is not set");
+    return NextResponse.json(
+      { ok: false, error: "Server misconfigured" },
+      { status: 500 }
+    );
+  }
+
+  // Rate-limit by stable user id (email can change).
+  const rate = limiter.check(user.id);
   if (!rate.allowed) {
     return NextResponse.json(
       { ok: false, error: "Too many reports. Try again later." },
@@ -60,40 +74,44 @@ export async function POST(request: Request) {
     );
   }
 
-  const token = process.env.GITHUB_BUGS_TOKEN;
-  if (!token) {
-    console.error("GITHUB_BUGS_TOKEN is not set");
-    return NextResponse.json(
-      { ok: false, error: "Server misconfigured" },
-      { status: 500 }
-    );
-  }
-
   const issue = formatIssue({
     description,
     email: user.email,
+    // `referer` is best-effort diagnostic info — it can be absent or spoofed.
     url: request.headers.get("referer") ?? "(unknown)",
     timestamp: new Date().toISOString(),
     userAgent: request.headers.get("user-agent") ?? "(unknown)",
   });
 
-  const githubResponse = await fetch(GITHUB_API, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/vnd.github+json",
-      "X-GitHub-Api-Version": "2022-11-28",
-      "Content-Type": "application/json",
-      "User-Agent": "speedero-security-bug-reporter",
-    },
-    body: JSON.stringify({
-      title: issue.title,
-      body: issue.body,
-      labels: issue.labels,
-    }),
-  });
+  let githubResponse: Response;
+  try {
+    githubResponse = await fetch(GITHUB_API, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json",
+        "User-Agent": "speedero-security-bug-reporter",
+      },
+      body: JSON.stringify({
+        title: issue.title,
+        body: issue.body,
+        labels: issue.labels,
+      }),
+      signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
+    });
+  } catch (error) {
+    limiter.rollback(user.id);
+    console.error("GitHub issue request failed", error);
+    return NextResponse.json(
+      { ok: false, error: "Could not file the report" },
+      { status: 504 }
+    );
+  }
 
   if (!githubResponse.ok) {
+    limiter.rollback(user.id);
     const text = await githubResponse.text().catch(() => "");
     console.error("GitHub issue creation failed", githubResponse.status, text);
     return NextResponse.json(
@@ -101,6 +119,9 @@ export async function POST(request: Request) {
       { status: 502 }
     );
   }
+
+  const created = (await githubResponse.json().catch(() => ({}))) as { number?: number };
+  console.info("bug filed", { userId: user.id, issue: created.number });
 
   return NextResponse.json({ ok: true });
 }

@@ -70,4 +70,21 @@ describe("createRateLimiter", () => {
     current = 1001;
     expect(limiter.check("aj@example.com").allowed).toBe(true);
   });
+
+  test("rollback removes the most recent hit, freeing a slot", () => {
+    const current = 0;
+    const limiter = createRateLimiter({ max: 2, windowMs: 1000, now: () => current });
+    expect(limiter.check("aj@example.com").allowed).toBe(true);
+    expect(limiter.check("aj@example.com").allowed).toBe(true);
+    expect(limiter.check("aj@example.com").allowed).toBe(false);
+    limiter.rollback("aj@example.com");
+    expect(limiter.check("aj@example.com").allowed).toBe(true);
+  });
+
+  test("rollback on unknown or empty key is a no-op", () => {
+    const limiter = createRateLimiter({ max: 1, windowMs: 1000, now: () => 0 });
+    // Does not throw:
+    limiter.rollback("never-checked@example.com");
+    expect(limiter.check("never-checked@example.com").allowed).toBe(true);
+  });
 });
