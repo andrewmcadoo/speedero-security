@@ -85,7 +85,10 @@ export function ReportBugButton() {
     abortRef.current = controller;
     setStatus({ kind: "submitting" });
     try {
-      const response = await fetch("/api/bugs", {
+      // basePath is not auto-prefixed on browser fetch; read it from env so this
+      // works both on Clipper (basePath="/SecApp") and any other host.
+      const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+      const response = await fetch(`${basePath}/api/bugs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ description }),
