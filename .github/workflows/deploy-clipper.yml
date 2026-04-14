@@ -2,7 +2,7 @@ name: Deploy to Clipper
 
 on:
   push:
-    branches: [clipper]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
