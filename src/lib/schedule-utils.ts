@@ -3,6 +3,45 @@ import type { ScheduleEntry } from "@/types/schedule";
 const PAST_DAYS = 7;
 const FUTURE_DAYS = 30;
 
+const DEFAULT_TIMEZONE = "America/Los_Angeles";
+
+/**
+ * Returns today/tomorrow as "YYYY-MM-DD" strings anchored to a specific
+ * timezone (APP_TIMEZONE env override, defaulting to America/Los_Angeles).
+ *
+ * This is the authoritative source for "what day is it" on the server.
+ * Using the host's local time breaks on Vercel (UTC) where after ~17:00 PDT
+ * the server's "today" rolls to the next calendar day while the user's
+ * browser is still on the previous day.
+ *
+ * Tomorrow is derived from today's string by adding one UTC day — purely
+ * string arithmetic on the already-resolved calendar date — so DST
+ * transitions cannot shift it.
+ */
+export function getAnchorDates(now: Date = new Date()): {
+  today: string;
+  tomorrow: string;
+  timezone: string;
+} {
+  const timezone = process.env.APP_TIMEZONE || DEFAULT_TIMEZONE;
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const today = fmt.format(now);
+  const [y, m, d] = today.split("-").map(Number);
+  const tomorrowDate = new Date(Date.UTC(y, m - 1, d));
+  tomorrowDate.setUTCDate(tomorrowDate.getUTCDate() + 1);
+  const tomorrow = [
+    tomorrowDate.getUTCFullYear(),
+    String(tomorrowDate.getUTCMonth() + 1).padStart(2, "0"),
+    String(tomorrowDate.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+  return { today, tomorrow, timezone };
+}
+
 /**
  * Filter schedule entries to a rolling window around today.
  */
