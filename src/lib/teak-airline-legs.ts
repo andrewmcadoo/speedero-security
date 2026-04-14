@@ -1,3 +1,5 @@
+import type { TravelLeg } from "@/types/schedule";
+
 const MONTH_NAMES: Record<string, number> = {
   jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
   jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
@@ -8,9 +10,12 @@ const MONTH_NAMES: Record<string, number> = {
  * Mirrors google-sheets.ts#parseSheetDate but with inverted tokens
  * (DD-MMM instead of MMM-DD).
  *
- * Year inference: pick the year that keeps the date within ~6 months
- * of `now` in either direction. Ties (exactly 6 months) prefer the
- * forward direction. Pass `now` explicitly for deterministic tests.
+ * Year inference: uses `now`'s year by default. If the target month is
+ * more than 6 calendar months ahead of `now`'s month, bumps back to the
+ * previous year; if more than 6 calendar months behind, bumps forward
+ * to the next year. Boundary cases (exactly ±6 months) keep the current
+ * year. Comparison is month-index only — day and hour are not considered.
+ * Pass `now` explicitly for deterministic tests.
  */
 export function parseTeakDate(
   raw: string,
@@ -48,8 +53,6 @@ export function parseTeakDate(
   const d = String(day).padStart(2, "0");
   return `${chosenYear}-${m}-${d}`;
 }
-
-import type { TravelLeg } from "@/types/schedule";
 
 function cell(row: readonly string[], idx: number): string {
   return (row[idx] ?? "").trim();
