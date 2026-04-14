@@ -20,14 +20,17 @@ const EPO_FILTERS = [
 export function EpoDashboard({
   entries,
   assignedDates,
+  userName,
   todayISO,
   tomorrowISO,
 }: {
   entries: DashboardEntry[];
   assignedDates: string[];
+  userName: string;
   todayISO: string;
   tomorrowISO: string;
 }) {
+  const firstName = userName.trim().split(/\s+/)[0] ?? userName;
   const [filter, setFilter] = useState<FilterOption>("all");
   const [search, setSearch] = useState("");
 
@@ -66,7 +69,9 @@ export function EpoDashboard({
       <header className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold">Speedero Security</h1>
-          <p className="text-sm text-gray-400">EPO Dashboard</p>
+          <p className="text-sm text-gray-400">
+            {firstName}&apos;s Assignment Schedule
+          </p>
         </div>
         <SignOutButton />
       </header>
