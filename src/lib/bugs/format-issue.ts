@@ -9,7 +9,7 @@ export type FormatIssueInput = {
 export type FormattedIssue = {
   title: string;
   body: string;
-  labels: string[];
+  labels: readonly ["bug", "user-report"];
 };
 
 const TITLE_MAX = 60;
@@ -21,7 +21,7 @@ export function formatIssue(input: FormatIssueInput): FormattedIssue {
   const title =
     trimmed.length < MIN_DESCRIPTION_FOR_TITLE
       ? `Bug report from ${input.email}`
-      : trimmed.slice(0, TITLE_MAX);
+      : trimmed.replace(/\s+/g, " ").slice(0, TITLE_MAX);
 
   const body = [
     `Reported by: ${input.email}`,
@@ -37,6 +37,6 @@ export function formatIssue(input: FormatIssueInput): FormattedIssue {
   return {
     title,
     body,
-    labels: ["bug", "user-report"],
+    labels: ["bug", "user-report"] as const,
   };
 }

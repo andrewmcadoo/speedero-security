@@ -15,7 +15,7 @@ describe("formatIssue", () => {
     expect(issue.title).toBe("The EPO dropdown does not save when I click submit quickly");
   });
 
-  test("truncates long descriptions at 60 chars without trailing whitespace", () => {
+  test("truncates long descriptions to 60 chars", () => {
     const description = "x".repeat(70);
     const issue = formatIssue({ description, ...META });
     expect(issue.title).toBe("x".repeat(60));
@@ -48,11 +48,29 @@ describe("formatIssue", () => {
     expect(issue.labels).toEqual(["bug", "user-report"]);
   });
 
-  test("trims whitespace when extracting title", () => {
-    const issue = formatIssue({
-      description: "   leading spaces in description text here and more content",
-      ...META,
-    });
-    expect(issue.title.startsWith(" ")).toBe(false);
+  test("trims leading whitespace before slicing title", () => {
+    const description = "   leading spaces in description text here and more content";
+    const issue = formatIssue({ description, ...META });
+    expect(issue.title).toBe(description.trim().slice(0, 60));
+  });
+
+  test("uses description when length is exactly 10 (boundary)", () => {
+    const description = "0123456789"; // exactly 10 chars
+    const issue = formatIssue({ description, ...META });
+    expect(issue.title).toBe("0123456789");
+  });
+
+  test("falls back when length is 9 (boundary)", () => {
+    const description = "012345678"; // 9 chars
+    const issue = formatIssue({ description, ...META });
+    expect(issue.title).toBe("Bug report from aj@example.com");
+  });
+
+  test("collapses newlines in title", () => {
+    const description = "Button crashes\n\nsteps:\n1. open page";
+    const issue = formatIssue({ description, ...META });
+    expect(issue.title).toBe("Button crashes steps: 1. open page");
+    // body preserves the original description (unchanged)
+    expect(issue.body.endsWith(description)).toBe(true);
   });
 });
