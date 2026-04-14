@@ -51,12 +51,12 @@ export function ScheduleDetailCard({ entry }: { entry: DashboardEntry }) {
             )}
             {entry.travelLeg?.action === "Pick up" && (
               <span className="shrink-0 rounded bg-green-900/60 px-1.5 py-0.5 text-[10px] font-medium text-green-300">
-                TEAK PU
+                PICK UP
               </span>
             )}
             {entry.travelLeg?.action === "Drop off" && (
               <span className="shrink-0 rounded bg-rose-900/60 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">
-                TEAK DO
+                DROP OFF
               </span>
             )}
             {(entry.departure.airport ||
