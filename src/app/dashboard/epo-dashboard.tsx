@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { DashboardEntry } from "@/types/schedule";
 import { SignOutButton } from "@/components/sign-out-button";
+import { ReportBugButton } from "@/components/report-bug-button";
 import { DateHeader } from "@/components/date-header";
 import { ScheduleDetailCard } from "@/components/schedule-detail-card";
 import {
@@ -30,7 +31,7 @@ export function EpoDashboard({
   todayISO: string;
   tomorrowISO: string;
 }) {
-  const firstName = userName.trim().split(/\s+/)[0] ?? userName;
+  const firstName = (userName ?? "").trim().split(/\s+/)[0] || "";
   const [filter, setFilter] = useState<FilterOption>("all");
   const [search, setSearch] = useState("");
 
@@ -70,10 +71,13 @@ export function EpoDashboard({
         <div>
           <h1 className="text-xl font-bold">Speedero Security</h1>
           <p className="text-sm text-gray-400">
-            {firstName}&apos;s Assignment Schedule
+            {firstName ? `${firstName}'s Assignment Schedule` : "Assignment Schedule"}
           </p>
         </div>
-        <SignOutButton />
+        <div className="flex items-center gap-2">
+          <ReportBugButton />
+          <SignOutButton />
+        </div>
       </header>
 
       <div className="mb-4">

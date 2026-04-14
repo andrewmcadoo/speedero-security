@@ -1,6 +1,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Profile } from "@/types/schedule";
 
+interface ProfileRow {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: "epo" | "management";
+  created_at: string;
+}
+
+function toProfile(row: ProfileRow): Profile {
+  return {
+    id: row.id,
+    email: row.email,
+    fullName: row.full_name ?? "",
+    role: row.role,
+    createdAt: row.created_at,
+  };
+}
+
 export async function getProfile(
   supabase: SupabaseClient
 ): Promise<Profile | null> {
@@ -15,7 +33,7 @@ export async function getProfile(
     .eq("id", user.id)
     .single();
 
-  if (data) return data as Profile;
+  if (data) return toProfile(data as ProfileRow);
 
   // Profile row missing (trigger may have failed on first login).
   // Create it now as a fallback.
@@ -31,7 +49,7 @@ export async function getProfile(
     .select()
     .single();
 
-  return newProfile as Profile | null;
+  return newProfile ? toProfile(newProfile as ProfileRow) : null;
 }
 
 export async function getAssignmentsForUser(
