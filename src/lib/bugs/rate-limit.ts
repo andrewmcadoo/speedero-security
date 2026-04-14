@@ -17,6 +17,9 @@ export function createRateLimiter({
   windowMs,
   now = () => Date.now(),
 }: RateLimiterOptions): RateLimiter {
+  // Keys are never deleted — acceptable here because the user set is small
+  // and bounded. If reused for untrusted/unbounded keys (IPs, etc.), add
+  // periodic pruning of empty entries.
   const hits = new Map<string, number[]>();
 
   return {
