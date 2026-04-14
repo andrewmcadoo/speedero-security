@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { formatIssue } from "@/lib/bugs/format-issue";
+import { DESCRIPTION_MAX, formatIssue } from "@/lib/bugs/format-issue";
 import { createRateLimiter } from "@/lib/bugs/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const DESCRIPTION_MAX = 5000;
 const REPO = "andrewmcadoo/speedero-security";
 const GITHUB_API = `https://api.github.com/repos/${REPO}/issues`;
 const GITHUB_TIMEOUT_MS = 10_000;

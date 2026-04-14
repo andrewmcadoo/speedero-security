@@ -14,6 +14,7 @@ export type FormattedIssue = {
 
 const TITLE_MAX = 60;
 const MIN_DESCRIPTION_FOR_TITLE = 10;
+export const DESCRIPTION_MAX = 5000;
 
 export function formatIssue(input: FormatIssueInput): FormattedIssue {
   const trimmed = input.description.trim();
