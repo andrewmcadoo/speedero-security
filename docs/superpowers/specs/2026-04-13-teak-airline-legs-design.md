@@ -131,11 +131,10 @@ Rows, in order:
 | Action | `travelLeg.action`; render `"Unknown"` as `—` |
 | Location | `travelLeg.location` |
 | Time | `travelLeg.time` |
+| Companion | `travelLeg.companion` |
 | Companion Pre-Position | `travelLeg.companionPrePositionFlight` |
 | Teak Flight | `travelLeg.teakFlight` |
 | Companion Return | `travelLeg.companionReturnFlight` |
-
-(The `companion` field is intentionally **not rendered** — the EPO viewing the card is the companion, so showing their own name is noise. The field is still parsed/stored for future use.)
 
 **Render rules:**
 
