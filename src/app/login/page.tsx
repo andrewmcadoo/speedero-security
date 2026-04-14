@@ -94,10 +94,10 @@ function LoginForm() {
       <div className="w-full max-w-sm space-y-8 px-4">
         <div className="text-center">
           <h1 className="text-3xl font-bold tracking-tight">
-            Security Scheduler
+            Speedero Security
           </h1>
           <p className="mt-2 text-gray-400">
-            Sign in to view your assignments
+            Sign in to see your schedule
           </p>
         </div>
 
