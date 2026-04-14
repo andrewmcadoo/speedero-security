@@ -93,8 +93,6 @@ export function ScheduleDetailCard({ entry }: { entry: DashboardEntry }) {
             <ReadOnlyField label="LODGING" value={entry.lodging} />
           </div>
 
-          <FlightDetailsSection entry={entry} />
-
           <div>
             <div className={labelClass}>DETAIL</div>
             <div className="text-sm font-bold text-gray-100">
@@ -120,6 +118,7 @@ export function ScheduleDetailCard({ entry }: { entry: DashboardEntry }) {
               </div>
             </div>
           )}
+          <FlightDetailsSection entry={entry} />
           {entry.travelLeg && <TravelDetailsSection leg={entry.travelLeg} />}
         </div>
       )}
