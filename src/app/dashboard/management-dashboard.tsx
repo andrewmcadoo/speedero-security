@@ -58,10 +58,8 @@ export function ManagementDashboard({
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
       <header className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Schedule Management</h1>
-          <p className="text-sm text-gray-400">
-            {entries.length} dates &middot; Full details
-          </p>
+          <h1 className="text-xl font-bold">Speedero Security</h1>
+          <p className="text-sm text-gray-400">Management Dashboard</p>
         </div>
         <div className="flex items-center gap-2">
           <Link

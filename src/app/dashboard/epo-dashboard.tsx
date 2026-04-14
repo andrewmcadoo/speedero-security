@@ -20,13 +20,11 @@ const EPO_FILTERS = [
 export function EpoDashboard({
   entries,
   assignedDates,
-  userName,
   todayISO,
   tomorrowISO,
 }: {
   entries: DashboardEntry[];
   assignedDates: string[];
-  userName: string;
   todayISO: string;
   tomorrowISO: string;
 }) {
@@ -67,10 +65,8 @@ export function EpoDashboard({
     <div className="mx-auto w-full max-w-3xl px-4 py-6">
       <header className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Schedule</h1>
-          <p className="text-sm text-gray-400">
-            {userName} &middot; {entries.length} assigned dates
-          </p>
+          <h1 className="text-xl font-bold">Speedero Security</h1>
+          <p className="text-sm text-gray-400">EPO Dashboard</p>
         </div>
         <SignOutButton />
       </header>

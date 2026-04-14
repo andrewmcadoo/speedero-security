@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Security Scheduler",
+  title: "Speedero Security",
   description: "EPO assignment and schedule management",
 };
 

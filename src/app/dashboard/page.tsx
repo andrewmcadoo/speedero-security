@@ -137,7 +137,6 @@ export default async function DashboardPage() {
     <EpoDashboard
       entries={entries}
       assignedDates={assignedDates}
-      userName={profile.fullName}
       todayISO={today}
       tomorrowISO={tomorrow}
     />
