@@ -21,10 +21,14 @@ export function EpoDashboard({
   entries,
   assignedDates,
   userName,
+  todayISO,
+  tomorrowISO,
 }: {
   entries: DashboardEntry[];
   assignedDates: string[];
   userName: string;
+  todayISO: string;
+  tomorrowISO: string;
 }) {
   const [filter, setFilter] = useState<FilterOption>("all");
   const [search, setSearch] = useState("");
@@ -101,6 +105,8 @@ export function EpoDashboard({
               <DateHeader
                 dateStr={entry.date}
                 status={entry.confirmationStatus}
+                todayISO={todayISO}
+                tomorrowISO={tomorrowISO}
               />
               <ScheduleDetailCard entry={entry} />
             </div>

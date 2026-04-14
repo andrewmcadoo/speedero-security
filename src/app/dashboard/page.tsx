@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getProfile, getAssignmentsForUser, getDateSettings, getAllAssignmentsWithProfiles, getAllEpos } from "@/lib/supabase/queries";
 import { fetchSchedule, fetchTravelLegs } from "@/lib/google-sheets";
 import type { ScheduleEntry, DashboardEntry, DetailLevel } from "@/types/schedule";
-import { isThisWeek, isNextWeek } from "@/lib/schedule-utils";
+import { isThisWeek, isNextWeek, getAnchorDates } from "@/lib/schedule-utils";
 import { EpoDashboard } from "./epo-dashboard";
 import { ManagementDashboard } from "./management-dashboard";
 import { redirect } from "next/navigation";
@@ -30,8 +30,7 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const { today, tomorrow } = getAnchorDates();
   const isManagement = profile.role === "management";
   const [schedule, dateSettings] = await Promise.all([
     fetchScheduleData(),
@@ -88,6 +87,8 @@ export default async function DashboardPage() {
           email: e.email,
         }))}
         profileId={profile.id}
+        todayISO={today}
+        tomorrowISO={tomorrow}
       />
     );
   }
@@ -137,6 +138,8 @@ export default async function DashboardPage() {
       entries={entries}
       assignedDates={assignedDates}
       userName={profile.fullName}
+      todayISO={today}
+      tomorrowISO={tomorrow}
     />
   );
 }

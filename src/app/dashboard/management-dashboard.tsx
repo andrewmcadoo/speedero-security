@@ -15,10 +15,14 @@ export function ManagementDashboard({
   entries,
   epos,
   profileId,
+  todayISO,
+  tomorrowISO,
 }: {
   entries: DashboardEntry[];
   epos: { id: string; fullName: string; email: string }[];
   profileId: string;
+  todayISO: string;
+  tomorrowISO: string;
 }) {
   const [filter, setFilter] = useState<FilterOption>("all");
   const [search, setSearch] = useState("");
@@ -99,6 +103,8 @@ export function ManagementDashboard({
               <DateHeader
                 dateStr={entry.date}
                 status={entry.confirmationStatus}
+                todayISO={todayISO}
+                tomorrowISO={tomorrowISO}
               />
               <ManagementCard
                 entry={entry}
