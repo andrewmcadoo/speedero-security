@@ -58,4 +58,16 @@ export interface DashboardEntry extends ScheduleEntry {
   isPast?: boolean;
   isThisWeek?: boolean;
   isNextWeek?: boolean;
+  travelLeg?: TravelLeg;
+}
+
+export interface TravelLeg {
+  date: string; // ISO YYYY-MM-DD
+  action: "Pick up" | "Drop off" | "Unknown";
+  location: string;
+  time: string;
+  companion: string;
+  companionPrePositionFlight: string;
+  teakFlight: string;
+  companionReturnFlight: string;
 }
