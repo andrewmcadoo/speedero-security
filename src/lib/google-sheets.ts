@@ -1,6 +1,5 @@
 import { google, type sheets_v4 } from "googleapis";
-import type { ScheduleEntry, TravelLeg } from "@/types/schedule";
-import { buildTravelLegsMap } from "./teak-airline-legs";
+import type { ScheduleEntry } from "@/types/schedule";
 
 // Column indices (0-based) matching the master sheet layout
 const COL = {
@@ -197,29 +196,3 @@ export async function fetchSchedule(): Promise<ScheduleEntry[]> {
   return entries;
 }
 
-const TEAK_AIRLINE_LEGS_RANGE = "Teak Airline Legs!A:H";
-
-/**
- * Fetch rows from the "Teak Airline Legs" sheet and return a map
- * keyed by ISO date. Returns an empty map on any error (travel details
- * are a non-critical enhancement — dashboard must still render without
- * them).
- */
-export async function fetchTravelLegs(): Promise<Map<string, TravelLeg>> {
-  try {
-    const auth = getAuth();
-    const sheets = google.sheets({ version: "v4", auth });
-
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId: process.env.GOOGLE_SHEETS_SPREADSHEET_ID,
-      range: TEAK_AIRLINE_LEGS_RANGE,
-      valueRenderOption: "FORMATTED_VALUE",
-    });
-
-    const rows = (response.data.values ?? []) as string[][];
-    return buildTravelLegsMap(rows);
-  } catch (error) {
-    console.error("fetchTravelLegs failed:", error);
-    return new Map();
-  }
-}
