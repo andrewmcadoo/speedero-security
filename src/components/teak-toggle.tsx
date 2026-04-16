@@ -2,14 +2,63 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { TravelLeg } from "@/types/schedule";
+import { ConfirmDialog } from "./confirm-dialog";
 
 interface TeakToggleProps {
   date: string;
   initialLeg?: TravelLeg;
   initialTeakNight: boolean;
   profileId: string;
+}
+
+type PendingAction =
+  | { kind: "unset"; action: "Pick up" | "Drop off" }
+  | {
+      kind: "switch";
+      from: "Pick up" | "Drop off";
+      to: "Pick up" | "Drop off";
+    };
+
+const actionLabel = (a: "Pick up" | "Drop off"): string =>
+  a === "Pick up" ? "Pick Up" : "Drop Off";
+
+function legHasAnyField(leg: TravelLeg): boolean {
+  return [
+    leg.location,
+    leg.time,
+    leg.companion,
+    leg.companionPrePositionFlight,
+    leg.teakFlight,
+    leg.companionReturnFlight,
+  ].some((v) => v.trim() !== "");
+}
+
+interface DialogCopy {
+  title: string;
+  body: string;
+  confirmLabel: string;
+  variant: "destructive" | "neutral";
+}
+
+function dialogCopy(pending: PendingAction): DialogCopy {
+  if (pending.kind === "unset") {
+    const label = actionLabel(pending.action);
+    return {
+      title: `Remove ${label}?`,
+      body:
+        "This will delete the location, time, companion, and flight details you've entered for this date.",
+      confirmLabel: `Remove ${label}`,
+      variant: "destructive",
+    };
+  }
+  return {
+    title: `Change ${actionLabel(pending.from)} to ${actionLabel(pending.to)}?`,
+    body: "The location, time, companion, and flight details will be kept.",
+    confirmLabel: `Change to ${actionLabel(pending.to)}`,
+    variant: "neutral",
+  };
 }
 
 const fieldDefs = [
@@ -40,6 +89,7 @@ export function TeakToggle({ date, initialLeg, initialTeakNight, profileId }: Te
   const [teakNight, setTeakNight] = useState(initialTeakNight);
   const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -166,8 +216,38 @@ export function TeakToggle({ date, initialLeg, initialTeakNight, profileId }: Te
     setSaving(false);
   };
 
+  function onPickUpOrDropOffTap(tapped: "Pick up" | "Drop off") {
+    if (saving) return;
+    if (!leg) {
+      void handleToggle(tapped);
+      return;
+    }
+    if (leg.action === tapped) {
+      if (!legHasAnyField(leg)) {
+        void handleToggle(tapped);
+        return;
+      }
+      setPendingAction({ kind: "unset", action: tapped });
+      return;
+    }
+    setPendingAction({ kind: "switch", from: leg.action, to: tapped });
+  }
+
+  function confirmPending() {
+    if (!pendingAction) return;
+    const tapped =
+      pendingAction.kind === "unset" ? pendingAction.action : pendingAction.to;
+    setPendingAction(null);
+    void handleToggle(tapped);
+  }
+
+  const cancelPending = useCallback(() => {
+    setPendingAction(null);
+  }, []);
+
   const isPickUp = leg?.action === "Pick up";
   const isDropOff = leg?.action === "Drop off";
+  const dialogCopyResolved = pendingAction ? dialogCopy(pendingAction) : null;
 
   return (
     <div className="border-t border-gray-700 pt-2.5">
@@ -184,7 +264,7 @@ export function TeakToggle({ date, initialLeg, initialTeakNight, profileId }: Te
       </div>
       <div className="flex flex-wrap gap-1.5">
         <button
-          onClick={() => handleToggle("Pick up")}
+          onClick={() => onPickUpOrDropOffTap("Pick up")}
           disabled={saving}
           className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
             isPickUp
@@ -195,7 +275,7 @@ export function TeakToggle({ date, initialLeg, initialTeakNight, profileId }: Te
           Pick Up
         </button>
         <button
-          onClick={() => handleToggle("Drop off")}
+          onClick={() => onPickUpOrDropOffTap("Drop off")}
           disabled={saving}
           className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
             isDropOff
@@ -236,6 +316,17 @@ export function TeakToggle({ date, initialLeg, initialTeakNight, profileId }: Te
             {saving ? "Saving…" : "Save"}
           </button>
         </div>
+      )}
+      {dialogCopyResolved && (
+        <ConfirmDialog
+          open={true}
+          title={dialogCopyResolved.title}
+          body={dialogCopyResolved.body}
+          confirmLabel={dialogCopyResolved.confirmLabel}
+          variant={dialogCopyResolved.variant}
+          onConfirm={confirmPending}
+          onCancel={cancelPending}
+        />
       )}
     </div>
   );
