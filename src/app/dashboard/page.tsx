@@ -59,9 +59,9 @@ export default async function DashboardPage() {
 
   // Build date settings map
   const settingsMap = new Map(
-    dateSettings.map((ds: { date: string; detail_level: string }) => [
+    dateSettings.map((ds: { date: string; detail_level: string; teak_night: boolean }) => [
       ds.date,
-      ds.detail_level as DetailLevel,
+      { detailLevel: ds.detail_level as DetailLevel, teakNight: ds.teak_night },
     ])
   );
 
@@ -93,14 +93,18 @@ export default async function DashboardPage() {
 
     const entries: DashboardEntry[] = schedule
       .filter((s) => s.date >= today)
-      .map((s) => ({
-        ...s,
-        detailLevel: settingsMap.get(s.date) ?? "single",
-        assignedEpos: assignmentsByDate.get(s.date) ?? [],
-        isThisWeek: isThisWeek(s.date),
-        isNextWeek: isNextWeek(s.date),
-        travelLeg: travelLegsByDate.get(s.date),
-      }));
+      .map((s) => {
+        const setting = settingsMap.get(s.date);
+        return {
+          ...s,
+          teakNight: setting?.teakNight ?? false,
+          detailLevel: setting?.detailLevel ?? "single",
+          assignedEpos: assignmentsByDate.get(s.date) ?? [],
+          isThisWeek: isThisWeek(s.date),
+          isNextWeek: isNextWeek(s.date),
+          travelLeg: travelLegsByDate.get(s.date),
+        };
+      });
 
     return (
       <ManagementDashboard
@@ -146,18 +150,22 @@ export default async function DashboardPage() {
     assignmentsByDate.set(a.date, existing);
   }
 
-  const entries: DashboardEntry[] = schedule.map((s) => ({
-    ...s,
-    detailLevel: settingsMap.get(s.date) ?? "single",
-    assignedEpos: assignmentsByDate.get(s.date) ?? [],
-    isPast: s.date < today,
-    isThisWeek: isThisWeek(s.date),
-    isNextWeek: isNextWeek(s.date),
-    // Only attach travelLeg when this EPO is assigned to this date.
-    travelLeg: assignedDateSet.has(s.date)
-      ? travelLegsByDate.get(s.date)
-      : undefined,
-  }));
+  const entries: DashboardEntry[] = schedule.map((s) => {
+    const setting = settingsMap.get(s.date);
+    return {
+      ...s,
+      teakNight: setting?.teakNight ?? false,
+      detailLevel: setting?.detailLevel ?? "single",
+      assignedEpos: assignmentsByDate.get(s.date) ?? [],
+      isPast: s.date < today,
+      isThisWeek: isThisWeek(s.date),
+      isNextWeek: isNextWeek(s.date),
+      // Only attach travelLeg when this EPO is assigned to this date.
+      travelLeg: assignedDateSet.has(s.date)
+        ? travelLegsByDate.get(s.date)
+        : undefined,
+    };
+  });
 
   return (
     <EpoDashboard

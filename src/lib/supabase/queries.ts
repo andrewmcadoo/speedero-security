@@ -73,7 +73,13 @@ export async function getAllAssignmentsWithProfiles(
 }
 
 export async function getDateSettings(supabase: SupabaseClient) {
-  const { data } = await supabase.from("date_settings").select("*");
+  const { data, error } = await supabase
+    .from("date_settings")
+    .select("date, detail_level, teak_night");
+  if (error) {
+    console.error("getDateSettings failed:", error.message, error.code, error.details, error.hint);
+    return [];
+  }
   return data ?? [];
 }
 

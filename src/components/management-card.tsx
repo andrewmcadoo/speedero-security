@@ -141,6 +141,7 @@ export function ManagementCard({
           <TeakToggle
             date={entry.date}
             initialLeg={entry.travelLeg}
+            initialTeakNight={entry.teakNight}
             profileId={profileId}
           />
         </div>

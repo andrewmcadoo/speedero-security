@@ -8,6 +8,7 @@ import type { TravelLeg } from "@/types/schedule";
 interface TeakToggleProps {
   date: string;
   initialLeg?: TravelLeg;
+  initialTeakNight: boolean;
   profileId: string;
 }
 
@@ -22,14 +23,57 @@ const fieldDefs = [
 
 type FieldKey = (typeof fieldDefs)[number]["key"];
 
-export function TeakToggle({ date, initialLeg, profileId }: TeakToggleProps) {
+function toFieldState(leg?: TravelLeg): Record<FieldKey, string> {
+  return {
+    location: leg?.location ?? "",
+    time: leg?.time ?? "",
+    companion: leg?.companion ?? "",
+    companionPrePositionFlight: leg?.companionPrePositionFlight ?? "",
+    teakFlight: leg?.teakFlight ?? "",
+    companionReturnFlight: leg?.companionReturnFlight ?? "",
+  };
+}
+
+export function TeakToggle({ date, initialLeg, initialTeakNight, profileId }: TeakToggleProps) {
   const [leg, setLeg] = useState<TravelLeg | undefined>(initialLeg);
+  const [fields, setFields] = useState<Record<FieldKey, string>>(() => toFieldState(initialLeg));
+  const [teakNight, setTeakNight] = useState(initialTeakNight);
+  const [formOpen, setFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     setLeg(initialLeg);
+    setFields(toFieldState(initialLeg));
   }, [initialLeg]);
+
+  useEffect(() => {
+    setTeakNight(initialTeakNight);
+  }, [initialTeakNight]);
+
+  const handleTeakNightToggle = async () => {
+    if (saving) return;
+    const newValue = !teakNight;
+    const prev = teakNight;
+    setTeakNight(newValue);
+
+    const supabase = createClient();
+    const { error } = await supabase.from("date_settings").upsert(
+      {
+        date,
+        teak_night: newValue,
+        updated_by: profileId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "date" }
+    );
+    if (error) {
+      console.error("Teak night toggle failed:", error.message, error.code, error.details, error.hint);
+      setTeakNight(prev);
+    } else {
+      router.refresh();
+    }
+  };
 
   const handleToggle = async (action: "Pick up" | "Drop off") => {
     if (saving) return;
@@ -39,12 +83,13 @@ export function TeakToggle({ date, initialLeg, profileId }: TeakToggleProps) {
     if (leg?.action === action) {
       const prev = leg;
       setLeg(undefined);
+      setFormOpen(false);
       const { error } = await supabase
         .from("travel_legs")
         .delete()
         .eq("date", date);
       if (error) {
-        console.error("Delete travel leg failed:", error);
+        console.error("Delete travel leg failed:", error.message, error.code, error.details, error.hint);
         setLeg(prev);
       } else {
         router.refresh();
@@ -52,12 +97,13 @@ export function TeakToggle({ date, initialLeg, profileId }: TeakToggleProps) {
     } else if (leg) {
       const prev = leg;
       setLeg({ ...leg, action });
+      setFormOpen(true);
       const { error } = await supabase
         .from("travel_legs")
         .update({ action, updated_at: new Date().toISOString() })
         .eq("date", date);
       if (error) {
-        console.error("Update travel leg action failed:", error);
+        console.error("Update travel leg action failed:", error.message, error.code, error.details, error.hint);
         setLeg(prev);
       } else {
         router.refresh();
@@ -74,14 +120,17 @@ export function TeakToggle({ date, initialLeg, profileId }: TeakToggleProps) {
         companionReturnFlight: "",
       };
       setLeg(newLeg);
+      setFields(toFieldState(newLeg));
+      setFormOpen(true);
       const { error } = await supabase.from("travel_legs").insert({
         date,
         action,
         created_by: profileId,
       });
       if (error) {
-        console.error("Insert travel leg failed:", error);
+        console.error("Insert travel leg failed:", error.message, error.code, error.details, error.hint);
         setLeg(undefined);
+        setFormOpen(false);
       } else {
         router.refresh();
       }
@@ -89,25 +138,32 @@ export function TeakToggle({ date, initialLeg, profileId }: TeakToggleProps) {
     setSaving(false);
   };
 
-  const handleFieldBlur = async (fieldKey: FieldKey, value: string) => {
-    if (!leg) return;
-    const def = fieldDefs.find((f) => f.key === fieldKey);
-    if (!def) return;
+  const handleSave = async () => {
+    if (!leg || saving) return;
+    setSaving(true);
+
+    const updatePayload: Record<string, string> = { updated_at: new Date().toISOString() };
+    for (const def of fieldDefs) {
+      updatePayload[def.column] = fields[def.key];
+    }
 
     const prev = leg;
-    setLeg({ ...leg, [fieldKey]: value });
+    const updatedLeg = { ...leg, ...fields };
+    setLeg(updatedLeg);
 
     const supabase = createClient();
     const { error } = await supabase
       .from("travel_legs")
-      .update({ [def.column]: value, updated_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq("date", date);
     if (error) {
-      console.error(`Update ${def.column} failed:`, error);
+      console.error("Save travel leg failed:", error.message, error.code, error.details, error.hint);
       setLeg(prev);
     } else {
       router.refresh();
+      setFormOpen(false);
     }
+    setSaving(false);
   };
 
   const isPickUp = leg?.action === "Pick up";
@@ -115,8 +171,18 @@ export function TeakToggle({ date, initialLeg, profileId }: TeakToggleProps) {
 
   return (
     <div className="border-t border-gray-700 pt-2.5">
-      <div className="mb-1.5 text-[10px] text-gray-500">TEAK</div>
-      <div className="flex gap-1.5">
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-[10px] text-gray-500">TEAK</span>
+        {leg && !formOpen && (
+          <button
+            onClick={() => setFormOpen(true)}
+            className="text-[10px] text-teal-400 hover:text-teal-300"
+          >
+            Edit
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
         <button
           onClick={() => handleToggle("Pick up")}
           disabled={saving}
@@ -139,18 +205,36 @@ export function TeakToggle({ date, initialLeg, profileId }: TeakToggleProps) {
         >
           Drop Off
         </button>
+        <button
+          onClick={handleTeakNightToggle}
+          disabled={saving}
+          className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
+            teakNight
+              ? "bg-purple-900/60 text-purple-300"
+              : "border border-gray-600 text-gray-500 hover:border-purple-700 hover:text-purple-400"
+          } disabled:opacity-50`}
+        >
+          Teak Night
+        </button>
       </div>
 
-      {leg && (
+      {leg && formOpen && (
         <div className="mt-2 space-y-2 rounded-md bg-gray-950/50 p-2.5">
           {fieldDefs.map((def) => (
             <TeakField
               key={def.key}
               label={def.label}
-              value={leg[def.key]}
-              onBlur={(value) => handleFieldBlur(def.key, value)}
+              value={fields[def.key]}
+              onChange={(value) => setFields((prev) => ({ ...prev, [def.key]: value }))}
             />
           ))}
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="mt-1 w-full rounded bg-teal-700 px-3 py-1.5 text-xs font-medium text-teal-100 transition-colors hover:bg-teal-600 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
         </div>
       )}
     </div>
@@ -160,29 +244,20 @@ export function TeakToggle({ date, initialLeg, profileId }: TeakToggleProps) {
 function TeakField({
   label,
   value,
-  onBlur,
+  onChange,
 }: {
   label: string;
   value: string;
-  onBlur: (value: string) => void;
+  onChange: (value: string) => void;
 }) {
-  const [local, setLocal] = useState(value);
-
-  useEffect(() => {
-    setLocal(value);
-  }, [value]);
-
   return (
     <div>
       <div className="mb-0.5 text-[10px] text-gray-500">{label}</div>
       <input
         type="text"
         className="w-full rounded border border-gray-700 bg-gray-950 px-2 py-1 text-xs text-gray-100 focus:border-blue-500 focus:outline-none"
-        value={local}
-        onChange={(e) => setLocal(e.target.value)}
-        onBlur={() => {
-          if (local !== value) onBlur(local);
-        }}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
       />
     </div>
   );
