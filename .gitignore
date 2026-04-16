@@ -47,3 +47,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local scratch files (not part of the app)
+TIMECARD.md
+Master Travel Sandbox - Teak Airline Legs.csv
+scripts/build-timecard.py
