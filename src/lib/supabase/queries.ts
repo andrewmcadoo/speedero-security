@@ -94,3 +94,8 @@ export async function getAllEpos(
     .order("full_name");
   return data ?? [];
 }
+
+export async function getTravelLegs(supabase: SupabaseClient) {
+  const { data } = await supabase.from("travel_legs").select("*");
+  return data ?? [];
+}
