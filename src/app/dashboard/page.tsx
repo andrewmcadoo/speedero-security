@@ -7,6 +7,26 @@ import { EpoDashboard } from "./epo-dashboard";
 import { ManagementDashboard } from "./management-dashboard";
 import { redirect } from "next/navigation";
 
+function toTravelLegsMap(
+  rows: { date: string; action: string; location: string; time: string; companion: string; companion_pre_position_flight: string; teak_flight: string; companion_return_flight: string }[]
+): Map<string, TravelLeg> {
+  return new Map(
+    rows.map((tl) => [
+      tl.date,
+      {
+        date: tl.date,
+        action: tl.action as TravelLeg["action"],
+        location: tl.location,
+        time: tl.time,
+        companion: tl.companion,
+        companionPrePositionFlight: tl.companion_pre_position_flight,
+        teakFlight: tl.teak_flight,
+        companionReturnFlight: tl.companion_return_flight,
+      },
+    ])
+  );
+}
+
 async function fetchScheduleData(): Promise<ScheduleEntry[]> {
   try {
     return await fetchSchedule();
@@ -69,21 +89,7 @@ export default async function DashboardPage() {
       assignmentsByDate.set(a.date, existing);
     }
 
-    const travelLegsByDate = new Map<string, TravelLeg>(
-      travelLegsRaw.map((tl: { date: string; action: string; location: string; time: string; companion: string; companion_pre_position_flight: string; teak_flight: string; companion_return_flight: string }) => [
-        tl.date,
-        {
-          date: tl.date,
-          action: tl.action as TravelLeg["action"],
-          location: tl.location,
-          time: tl.time,
-          companion: tl.companion,
-          companionPrePositionFlight: tl.companion_pre_position_flight,
-          teakFlight: tl.teak_flight,
-          companionReturnFlight: tl.companion_return_flight,
-        },
-      ])
-    );
+    const travelLegsByDate = toTravelLegsMap(travelLegsRaw);
 
     const entries: DashboardEntry[] = schedule
       .filter((s) => s.date >= today)
@@ -118,21 +124,7 @@ export default async function DashboardPage() {
     getTravelLegs(supabase),
   ]);
 
-  const travelLegsByDate = new Map<string, TravelLeg>(
-    travelLegsRaw.map((tl: { date: string; action: string; location: string; time: string; companion: string; companion_pre_position_flight: string; teak_flight: string; companion_return_flight: string }) => [
-      tl.date,
-      {
-        date: tl.date,
-        action: tl.action as TravelLeg["action"],
-        location: tl.location,
-        time: tl.time,
-        companion: tl.companion,
-        companionPrePositionFlight: tl.companion_pre_position_flight,
-        teakFlight: tl.teak_flight,
-        companionReturnFlight: tl.companion_return_flight,
-      },
-    ])
-  );
+  const travelLegsByDate = toTravelLegsMap(travelLegsRaw);
 
   const assignedDates = myAssignments.map((a: { date: string }) => a.date);
   const assignedDateSet = new Set(assignedDates);

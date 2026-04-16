@@ -7,10 +7,6 @@ function display(value: string): string {
   return value === "" ? "—" : value;
 }
 
-function displayAction(action: TravelLeg["action"]): string {
-  return action === "Unknown" ? "—" : action;
-}
-
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start gap-3">
@@ -32,7 +28,7 @@ export function TravelDetailsSection({ leg }: { leg: TravelLeg }) {
         </span>
       </summary>
       <div className="mt-2 space-y-1.5">
-        <Row label="Action" value={displayAction(leg.action)} />
+        <Row label="Action" value={leg.action} />
         <Row label="Location" value={display(leg.location)} />
         <Row label="Time" value={display(leg.time)} />
         <Row label="Companion" value={display(leg.companion)} />

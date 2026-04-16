@@ -63,7 +63,7 @@ export interface DashboardEntry extends ScheduleEntry {
 
 export interface TravelLeg {
   date: string; // ISO YYYY-MM-DD
-  action: "Pick up" | "Drop off" | "Unknown";
+  action: "Pick up" | "Drop off";
   location: string;
   time: string;
   companion: string;
