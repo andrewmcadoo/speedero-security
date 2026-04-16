@@ -22,13 +22,12 @@ export function TravelDetailsSection({ leg }: { leg: TravelLeg }) {
   return (
     <details className="group rounded-md border-t border-gray-700/50 bg-gray-950/50 px-2.5 py-2">
       <summary className="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium uppercase text-teal-400">
-        <span>Teak Pick-Up/Drop-Off</span>
+        <span>{leg.action === "Pick up" ? "Teak Pick Up" : "Teak Drop Off"}</span>
         <span className="text-gray-500 transition-transform group-open:rotate-90">
           ▶
         </span>
       </summary>
       <div className="mt-2 space-y-1.5">
-        <Row label="Action" value={leg.action} />
         <Row label="Location" value={display(leg.location)} />
         <Row label="Time" value={display(leg.time)} />
         <Row label="Companion" value={display(leg.companion)} />
