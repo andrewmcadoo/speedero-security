@@ -5,6 +5,7 @@ import type { DashboardEntry } from "@/types/schedule";
 import { statusBorderColor } from "./status-badge";
 import { DetailDropdown } from "./detail-dropdown";
 import { EpoAssignment } from "./epo-assignment";
+import { TeakToggle } from "./teak-toggle";
 import { CoverageBadge } from "./coverage-badge";
 import { DETAIL_LEVEL_LABELS } from "@/lib/detail-levels";
 import { getEpoColor } from "@/lib/epo-colors";
@@ -134,6 +135,12 @@ export function ManagementCard({
             date={entry.date}
             assignedEpos={entry.assignedEpos}
             allEpos={allEpos}
+            profileId={profileId}
+          />
+
+          <TeakToggle
+            date={entry.date}
+            initialLeg={entry.travelLeg}
             profileId={profileId}
           />
         </div>
