@@ -54,13 +54,23 @@ export function ManagementCard({
         className="flex w-full items-center justify-between p-3 text-left"
       >
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <h3 className="truncate text-sm font-semibold text-gray-100">
               {entry.activity || "No activity listed"}
             </h3>
             {entry.teakNight && (
               <span className="shrink-0 rounded bg-purple-900/60 px-1.5 py-0.5 text-[10px] font-medium text-purple-300">
                 TEAK NIGHT
+              </span>
+            )}
+            {entry.travelLeg?.action === "Pick up" && (
+              <span className="shrink-0 rounded bg-green-900/60 px-1.5 py-0.5 text-[10px] font-medium text-green-300">
+                PICK UP
+              </span>
+            )}
+            {entry.travelLeg?.action === "Drop off" && (
+              <span className="shrink-0 rounded bg-rose-900/60 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">
+                DROP OFF
               </span>
             )}
           </div>
