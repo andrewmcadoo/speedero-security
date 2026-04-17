@@ -52,3 +52,5 @@ next-env.d.ts
 TIMECARD.md
 Master Travel Sandbox - Teak Airline Legs.csv
 scripts/build-timecard.py
+CLIPPER.md
+CLIPPER_MIGRATION.md
