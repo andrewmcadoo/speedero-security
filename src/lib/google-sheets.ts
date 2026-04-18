@@ -1,4 +1,5 @@
-import { google, type sheets_v4 } from "googleapis";
+import { GoogleAuth } from "google-auth-library";
+import type { sheets_v4 } from "googleapis";
 import type { ScheduleEntry } from "@/types/schedule";
 
 // Column indices (0-based) matching the master sheet layout
@@ -28,7 +29,7 @@ const COL = {
 const HEADER_ROWS = 2; // Sheet has a 2-row header
 
 function getAuth() {
-  return new google.auth.GoogleAuth({
+  return new GoogleAuth({
     credentials: {
       client_email: process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
       private_key: process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(
@@ -173,17 +174,35 @@ function rowDataToEntry(
 
 export async function fetchSchedule(): Promise<ScheduleEntry[]> {
   const auth = getAuth();
-  const sheets = google.sheets({ version: "v4", auth });
+  const accessToken = await auth.getAccessToken();
+  const spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
 
-  const response = await sheets.spreadsheets.get({
-    spreadsheetId: process.env.GOOGLE_SHEETS_SPREADSHEET_ID,
-    includeGridData: true,
-    ranges: ["A:T"],
-    fields:
-      "sheets.data.rowData.values.formattedValue,sheets.data.rowData.values.effectiveValue,sheets.data.rowData.values.effectiveFormat.backgroundColor",
-  });
+  if (!accessToken) {
+    throw new Error("Missing Google Sheets access token");
+  }
 
-  const sheetData = response.data.sheets?.[0]?.data?.[0];
+  if (!spreadsheetId) {
+    throw new Error("Missing GOOGLE_SHEETS_SPREADSHEET_ID");
+  }
+
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?includeGridData=true&ranges=A%3AT&fields=sheets.data.rowData.values.formattedValue,sheets.data.rowData.values.effectiveValue,sheets.data.rowData.values.effectiveFormat.backgroundColor`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Google Sheets request failed: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const data = (await response.json()) as sheets_v4.Schema$Spreadsheet;
+
+  const sheetData = data.sheets?.[0]?.data?.[0];
   if (!sheetData?.rowData) return [];
 
   const rows = sheetData.rowData;
@@ -195,4 +214,3 @@ export async function fetchSchedule(): Promise<ScheduleEntry[]> {
 
   return entries;
 }
-
