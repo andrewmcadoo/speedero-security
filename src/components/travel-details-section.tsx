@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { TravelLeg } from "@/types/schedule";
 
 const labelClass = "text-[10px] text-gray-500 mb-0.5";
@@ -18,7 +19,13 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function TravelDetailsSection({ leg }: { leg: TravelLeg }) {
+export function TravelDetailsSection({
+  leg,
+  footer,
+}: {
+  leg: TravelLeg;
+  footer?: ReactNode;
+}) {
   return (
     <details className="group rounded-md border-t border-gray-700/50 bg-gray-950/50 px-2.5 py-2">
       <summary className="flex cursor-pointer list-none items-center justify-between text-[10px] font-medium uppercase text-teal-400">
@@ -35,6 +42,7 @@ export function TravelDetailsSection({ leg }: { leg: TravelLeg }) {
         <Row label="Teak Flight" value={display(leg.teakFlight)} />
         <Row label="Companion Return" value={display(leg.companionReturnFlight)} />
       </div>
+      {footer && <div className="mt-2 flex justify-end">{footer}</div>}
     </details>
   );
 }
