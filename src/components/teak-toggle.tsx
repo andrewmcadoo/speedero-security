@@ -217,6 +217,12 @@ export function TeakToggle({ date, initialLeg, initialTeakNight, profileId }: Te
     setSaving(false);
   };
 
+  function handleCancel() {
+    if (!leg) return;
+    setFields(toFieldState(leg));
+    setFormOpen(false);
+  }
+
   function onPickUpOrDropOffTap(tapped: "Pick up" | "Drop off") {
     if (saving) return;
     if (!leg) {
@@ -317,13 +323,22 @@ export function TeakToggle({ date, initialLeg, initialTeakNight, profileId }: Te
               onChange={(value) => setFields((prev) => ({ ...prev, [def.key]: value }))}
             />
           ))}
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="mt-1 w-full rounded bg-teal-700 px-3 py-1.5 text-xs font-medium text-teal-100 transition-colors hover:bg-teal-600 disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "Save"}
-          </button>
+          <div className="mt-1 flex gap-2">
+            <button
+              onClick={handleCancel}
+              disabled={saving}
+              className="shrink-0 rounded border border-gray-600 px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:border-gray-500 hover:text-gray-200 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 rounded bg-teal-700 px-3 py-1.5 text-xs font-medium text-teal-100 transition-colors hover:bg-teal-600 disabled:opacity-50"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
         </div>
       )}
       {dialogCopyResolved && (
