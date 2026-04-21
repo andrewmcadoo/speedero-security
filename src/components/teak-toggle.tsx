@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import type { TravelLeg } from "@/types/schedule";
 import { ConfirmDialog } from "./confirm-dialog";
+import { TravelDetailsSection } from "./travel-details-section";
 
 interface TeakToggleProps {
   date: string;
@@ -251,16 +252,8 @@ export function TeakToggle({ date, initialLeg, initialTeakNight, profileId }: Te
 
   return (
     <div className="border-t border-gray-700 pt-2.5">
-      <div className="mb-1.5 flex items-center justify-between">
+      <div className="mb-1.5">
         <span className="text-[10px] text-gray-500">TEAK</span>
-        {leg && !formOpen && (
-          <button
-            onClick={() => setFormOpen(true)}
-            className="text-[10px] text-teal-400 hover:text-teal-300"
-          >
-            Edit
-          </button>
-        )}
       </div>
       <div className="flex flex-wrap gap-1.5">
         <button
@@ -297,6 +290,22 @@ export function TeakToggle({ date, initialLeg, initialTeakNight, profileId }: Te
           Teak Night
         </button>
       </div>
+
+      {leg && !formOpen && (
+        <div className="mt-2">
+          <TravelDetailsSection
+            leg={leg}
+            footer={
+              <button
+                onClick={() => setFormOpen(true)}
+                className="text-[10px] text-teal-400 hover:text-teal-300"
+              >
+                Edit
+              </button>
+            }
+          />
+        </div>
+      )}
 
       {leg && formOpen && (
         <div className="mt-2 space-y-2 rounded-md bg-gray-950/50 p-2.5">
