@@ -289,8 +289,8 @@ export function TeakToggle({ date, initialLeg, initialTeakNight, profileId }: Te
           disabled={saving}
           className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
             teakNight
-              ? "bg-purple-900/60 text-purple-300"
-              : "border border-gray-600 text-gray-500 hover:border-purple-700 hover:text-purple-400"
+              ? "bg-green-900/60 text-green-300"
+              : "border border-gray-600 text-gray-500 hover:border-green-700 hover:text-green-400"
           } disabled:opacity-50`}
         >
           Teak Night

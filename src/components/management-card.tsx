@@ -60,7 +60,7 @@ export function ManagementCard({
               {entry.activity || "No activity listed"}
             </h3>
             {entry.teakNight && (
-              <span className="shrink-0 rounded bg-purple-900/60 px-1.5 py-0.5 text-[10px] font-medium text-purple-300">
+              <span className="shrink-0 rounded bg-green-900/60 px-1.5 py-0.5 text-[10px] font-medium text-green-300">
                 TEAK NIGHT
               </span>
             )}

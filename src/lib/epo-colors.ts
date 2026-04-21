@@ -3,7 +3,7 @@
  * Each EPO gets a consistent color based on their ID.
  */
 
-// Avoid green (confirmed), purple (teak night), yellow/amber (pending), red (coverage)
+// Avoid green (confirmed, teak night, pick up), rose (drop off), yellow/amber (pending), red (coverage)
 const EPO_COLORS = [
   { bg: "bg-cyan-900/60", text: "text-cyan-300" },
   { bg: "bg-sky-900/60", text: "text-sky-300" },
