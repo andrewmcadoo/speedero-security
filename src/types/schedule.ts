@@ -5,7 +5,6 @@ export interface ScheduleEntry {
   teakNight: boolean;
   activity: string;
   location: string;
-  transitions: string;
   coPilot: string;
   flightInfo: string;
   departure: {
@@ -58,7 +57,8 @@ export interface DashboardEntry extends ScheduleEntry {
   isPast?: boolean;
   isThisWeek?: boolean;
   isNextWeek?: boolean;
-  travelLeg?: TravelLeg;
+  pickupLeg?: TravelLeg;
+  dropoffLeg?: TravelLeg;
 }
 
 export interface TravelLeg {

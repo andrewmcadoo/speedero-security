@@ -8,22 +8,21 @@ const COL = {
   DAY: 1,
   CONFIRMED: 2,
   TEAK_NIGHT: 3,
-  TEAK_TRANSITIONS: 4,
-  ACTIVITY: 5,
-  NIGHT_LOCATION: 6,
-  CO_PILOT: 7,
-  AIRLINE_FLT: 8,
-  DEP_AIRPORT: 9,
-  DEP_FBO: 10,
-  DEP_TIME: 11,
-  ARR_AIRPORT: 12,
-  ARR_FBO: 13,
-  ARR_TIME: 14,
-  INTL_PAX: 15,
-  GROUND_TRANSPORT: 16,
-  LODGING: 17,
-  COMMENTS: 18,
-  ROW_ID: 19,
+  ACTIVITY: 4,
+  NIGHT_LOCATION: 5,
+  CO_PILOT: 6,
+  AIRLINE_FLT: 7,
+  DEP_AIRPORT: 8,
+  DEP_FBO: 9,
+  DEP_TIME: 10,
+  ARR_AIRPORT: 11,
+  ARR_FBO: 12,
+  ARR_TIME: 13,
+  INTL_PAX: 14,
+  GROUND_TRANSPORT: 15,
+  LODGING: 16,
+  COMMENTS: 17,
+  ROW_ID: 18,
 } as const;
 
 const HEADER_ROWS = 2; // Sheet has a 2-row header
@@ -151,7 +150,6 @@ function rowDataToEntry(
     teakNight: isGreenBackground(cells[COL.TEAK_NIGHT]),
     activity: cellValue(cells[COL.ACTIVITY]),
     location: cellValue(cells[COL.NIGHT_LOCATION]),
-    transitions: cellValue(cells[COL.TEAK_TRANSITIONS]),
     coPilot: cellValue(cells[COL.CO_PILOT]),
     flightInfo: cellValue(cells[COL.AIRLINE_FLT]),
     departure: {
@@ -186,7 +184,7 @@ export async function fetchSchedule(): Promise<ScheduleEntry[]> {
   }
 
   const response = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?includeGridData=true&ranges=A%3AT&fields=sheets.data.rowData.values.formattedValue,sheets.data.rowData.values.effectiveValue,sheets.data.rowData.values.effectiveFormat.backgroundColor`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?includeGridData=true&ranges=A%3AS&fields=sheets.data.rowData.values.formattedValue,sheets.data.rowData.values.effectiveValue,sheets.data.rowData.values.effectiveFormat.backgroundColor`,
     {
       headers: {
         Authorization: `Bearer ${accessToken}`,

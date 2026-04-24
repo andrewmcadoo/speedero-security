@@ -64,12 +64,12 @@ export function ManagementCard({
                 TEAK NIGHT
               </span>
             )}
-            {entry.travelLeg?.action === "Pick up" && (
+            {entry.pickupLeg && (
               <span className="shrink-0 rounded bg-green-900/60 px-1.5 py-0.5 text-[10px] font-medium text-green-300">
                 PICK UP
               </span>
             )}
-            {entry.travelLeg?.action === "Drop off" && (
+            {entry.dropoffLeg && (
               <span className="shrink-0 rounded bg-rose-900/60 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">
                 DROP OFF
               </span>
@@ -140,8 +140,8 @@ export function ManagementCard({
 
           <TeakToggle
             date={entry.date}
-            initialLeg={entry.travelLeg}
-            initialTeakNight={entry.teakNight}
+            initialPickup={entry.pickupLeg}
+            initialDropoff={entry.dropoffLeg}
             profileId={profileId}
           />
         </div>

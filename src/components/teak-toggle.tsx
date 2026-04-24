@@ -7,22 +7,16 @@ import type { TravelLeg } from "@/types/schedule";
 import { ConfirmDialog } from "./confirm-dialog";
 import { TravelDetailsSection } from "./travel-details-section";
 
+type Action = "Pick up" | "Drop off";
+
 interface TeakToggleProps {
   date: string;
-  initialLeg?: TravelLeg;
-  initialTeakNight: boolean;
+  initialPickup?: TravelLeg;
+  initialDropoff?: TravelLeg;
   profileId: string;
 }
 
-type PendingAction =
-  | { kind: "unset"; action: "Pick up" | "Drop off" }
-  | {
-      kind: "switch";
-      from: "Pick up" | "Drop off";
-      to: "Pick up" | "Drop off";
-    };
-
-const actionLabel = (a: "Pick up" | "Drop off"): string =>
+const actionLabel = (a: Action): string =>
   a === "Pick up" ? "Pick Up" : "Drop Off";
 
 function legHasAnyField(leg: TravelLeg): boolean {
@@ -36,32 +30,6 @@ function legHasAnyField(leg: TravelLeg): boolean {
   ].some((v) => v.trim() !== "");
 }
 
-interface DialogCopy {
-  title: string;
-  body: string;
-  confirmLabel: string;
-  variant: "destructive" | "neutral";
-}
-
-function dialogCopy(pending: PendingAction): DialogCopy {
-  if (pending.kind === "unset") {
-    const label = actionLabel(pending.action);
-    return {
-      title: `Remove ${label}?`,
-      body:
-        "This will delete the location, time, companion, and flight details you've entered for this date.",
-      confirmLabel: `Remove ${label}`,
-      variant: "destructive",
-    };
-  }
-  return {
-    title: `Change ${actionLabel(pending.from)} to ${actionLabel(pending.to)}?`,
-    body: "The location, time, companion, and flight details will be kept.",
-    confirmLabel: `Change to ${actionLabel(pending.to)}`,
-    variant: "neutral",
-  };
-}
-
 const fieldDefs = [
   { key: "location", label: "Location", column: "location" },
   { key: "time", label: "Time", column: "time" },
@@ -72,8 +40,9 @@ const fieldDefs = [
 ] as const;
 
 type FieldKey = (typeof fieldDefs)[number]["key"];
+type FieldState = Record<FieldKey, string>;
 
-function toFieldState(leg?: TravelLeg): Record<FieldKey, string> {
+function toFieldState(leg?: TravelLeg): FieldState {
   return {
     location: leg?.location ?? "",
     time: leg?.time ?? "",
@@ -84,114 +53,97 @@ function toFieldState(leg?: TravelLeg): Record<FieldKey, string> {
   };
 }
 
-export function TeakToggle({ date, initialLeg, initialTeakNight, profileId }: TeakToggleProps) {
-  const [leg, setLeg] = useState<TravelLeg | undefined>(initialLeg);
-  const [fields, setFields] = useState<Record<FieldKey, string>>(() => toFieldState(initialLeg));
-  const [teakNight, setTeakNight] = useState(initialTeakNight);
-  const [formOpen, setFormOpen] = useState(false);
+function emptyLeg(date: string, action: Action): TravelLeg {
+  return {
+    date,
+    action,
+    location: "",
+    time: "",
+    companion: "",
+    companionPrePositionFlight: "",
+    teakFlight: "",
+    companionReturnFlight: "",
+  };
+}
+
+export function TeakToggle({ date, initialPickup, initialDropoff, profileId }: TeakToggleProps) {
+  const [pickup, setPickup] = useState<TravelLeg | undefined>(initialPickup);
+  const [dropoff, setDropoff] = useState<TravelLeg | undefined>(initialDropoff);
+  const [pickupFields, setPickupFields] = useState<FieldState>(() => toFieldState(initialPickup));
+  const [dropoffFields, setDropoffFields] = useState<FieldState>(() => toFieldState(initialDropoff));
+  const [pickupFormOpen, setPickupFormOpen] = useState(false);
+  const [dropoffFormOpen, setDropoffFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [pendingRemoval, setPendingRemoval] = useState<Action | null>(null);
   const router = useRouter();
 
   useEffect(() => {
-    setLeg(initialLeg);
-    setFields(toFieldState(initialLeg));
-  }, [initialLeg]);
+    setPickup(initialPickup);
+    setPickupFields(toFieldState(initialPickup));
+  }, [initialPickup]);
 
   useEffect(() => {
-    setTeakNight(initialTeakNight);
-  }, [initialTeakNight]);
+    setDropoff(initialDropoff);
+    setDropoffFields(toFieldState(initialDropoff));
+  }, [initialDropoff]);
 
-  const handleTeakNightToggle = async () => {
-    if (saving) return;
-    const newValue = !teakNight;
-    const prev = teakNight;
-    setTeakNight(newValue);
+  const slotFor = (action: Action) =>
+    action === "Pick up"
+      ? { leg: pickup, setLeg: setPickup, setFields: setPickupFields, setFormOpen: setPickupFormOpen }
+      : { leg: dropoff, setLeg: setDropoff, setFields: setDropoffFields, setFormOpen: setDropoffFormOpen };
 
-    const supabase = createClient();
-    const { error } = await supabase.from("date_settings").upsert(
-      {
-        date,
-        teak_night: newValue,
-        updated_by: profileId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "date" }
-    );
-    if (error) {
-      console.error("Teak night toggle failed:", error.message, error.code, error.details, error.hint);
-      setTeakNight(prev);
-    } else {
-      router.refresh();
-    }
-  };
-
-  const handleToggle = async (action: "Pick up" | "Drop off") => {
+  const handleCreate = async (action: Action) => {
     if (saving) return;
     setSaving(true);
+    const { setLeg, setFields, setFormOpen } = slotFor(action);
+    const newLeg = emptyLeg(date, action);
+    setLeg(newLeg);
+    setFields(toFieldState(newLeg));
+    setFormOpen(true);
     const supabase = createClient();
-
-    if (leg?.action === action) {
-      const prev = leg;
+    const { error } = await supabase.from("travel_legs").insert({
+      date,
+      action,
+      created_by: profileId,
+    });
+    if (error) {
+      console.error("Insert travel leg failed:", error.message, error.code, error.details, error.hint);
       setLeg(undefined);
       setFormOpen(false);
-      const { error } = await supabase
-        .from("travel_legs")
-        .delete()
-        .eq("date", date);
-      if (error) {
-        console.error("Delete travel leg failed:", error.message, error.code, error.details, error.hint);
-        setLeg(prev);
-      } else {
-        router.refresh();
-      }
-    } else if (leg) {
-      const prev = leg;
-      setLeg({ ...leg, action });
-      setFormOpen(true);
-      const { error } = await supabase
-        .from("travel_legs")
-        .update({ action, updated_at: new Date().toISOString() })
-        .eq("date", date);
-      if (error) {
-        console.error("Update travel leg action failed:", error.message, error.code, error.details, error.hint);
-        setLeg(prev);
-      } else {
-        router.refresh();
-      }
     } else {
-      const newLeg: TravelLeg = {
-        date,
-        action,
-        location: "",
-        time: "",
-        companion: "",
-        companionPrePositionFlight: "",
-        teakFlight: "",
-        companionReturnFlight: "",
-      };
-      setLeg(newLeg);
-      setFields(toFieldState(newLeg));
-      setFormOpen(true);
-      const { error } = await supabase.from("travel_legs").insert({
-        date,
-        action,
-        created_by: profileId,
-      });
-      if (error) {
-        console.error("Insert travel leg failed:", error.message, error.code, error.details, error.hint);
-        setLeg(undefined);
-        setFormOpen(false);
-      } else {
-        router.refresh();
-      }
+      router.refresh();
     }
     setSaving(false);
   };
 
-  const handleSave = async () => {
-    if (!leg || saving) return;
+  const handleDelete = async (action: Action) => {
+    if (saving) return;
     setSaving(true);
+    const { leg, setLeg, setFormOpen } = slotFor(action);
+    const prev = leg;
+    setLeg(undefined);
+    setFormOpen(false);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("travel_legs")
+      .delete()
+      .eq("date", date)
+      .eq("action", action);
+    if (error) {
+      console.error("Delete travel leg failed:", error.message, error.code, error.details, error.hint);
+      setLeg(prev);
+    } else {
+      router.refresh();
+    }
+    setSaving(false);
+  };
+
+  const handleSave = async (action: Action) => {
+    if (saving) return;
+    const { leg, setLeg, setFormOpen } = slotFor(action);
+    if (!leg) return;
+    setSaving(true);
+    const fields = action === "Pick up" ? pickupFields : dropoffFields;
 
     const updatePayload: Record<string, string> = { updated_at: new Date().toISOString() };
     for (const def of fieldDefs) {
@@ -199,14 +151,14 @@ export function TeakToggle({ date, initialLeg, initialTeakNight, profileId }: Te
     }
 
     const prev = leg;
-    const updatedLeg = { ...leg, ...fields };
-    setLeg(updatedLeg);
+    setLeg({ ...leg, ...fields });
 
     const supabase = createClient();
     const { error } = await supabase
       .from("travel_legs")
       .update(updatePayload)
-      .eq("date", date);
+      .eq("date", date)
+      .eq("action", action);
     if (error) {
       console.error("Save travel leg failed:", error.message, error.code, error.details, error.hint);
       setLeg(prev);
@@ -217,44 +169,40 @@ export function TeakToggle({ date, initialLeg, initialTeakNight, profileId }: Te
     setSaving(false);
   };
 
-  function handleCancel() {
+  function handleCancel(action: Action) {
+    const { leg, setFields, setFormOpen } = slotFor(action);
     if (!leg) return;
     setFields(toFieldState(leg));
     setFormOpen(false);
   }
 
-  function onPickUpOrDropOffTap(tapped: "Pick up" | "Drop off") {
+  function onButtonTap(action: Action) {
     if (saving) return;
+    const { leg } = slotFor(action);
     if (!leg) {
-      void handleToggle(tapped);
+      void handleCreate(action);
       return;
     }
-    if (leg.action === tapped) {
-      if (!legHasAnyField(leg)) {
-        void handleToggle(tapped);
-        return;
-      }
-      setPendingAction({ kind: "unset", action: tapped });
+    if (!legHasAnyField(leg)) {
+      void handleDelete(action);
       return;
     }
-    setPendingAction({ kind: "switch", from: leg.action, to: tapped });
+    setPendingRemoval(action);
   }
 
   function confirmPending() {
-    if (!pendingAction) return;
-    const tapped =
-      pendingAction.kind === "unset" ? pendingAction.action : pendingAction.to;
-    setPendingAction(null);
-    void handleToggle(tapped);
+    if (!pendingRemoval) return;
+    const action = pendingRemoval;
+    setPendingRemoval(null);
+    void handleDelete(action);
   }
 
   const cancelPending = useCallback(() => {
-    setPendingAction(null);
+    setPendingRemoval(null);
   }, []);
 
-  const isPickUp = leg?.action === "Pick up";
-  const isDropOff = leg?.action === "Drop off";
-  const dialogCopyResolved = pendingAction ? dialogCopy(pendingAction) : null;
+  const isPickUp = pickup !== undefined;
+  const isDropOff = dropoff !== undefined;
 
   return (
     <div className="border-t border-gray-700 pt-2.5">
@@ -263,7 +211,7 @@ export function TeakToggle({ date, initialLeg, initialTeakNight, profileId }: Te
       </div>
       <div className="flex flex-wrap gap-1.5">
         <button
-          onClick={() => onPickUpOrDropOffTap("Pick up")}
+          onClick={() => onButtonTap("Pick up")}
           disabled={saving}
           className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
             isPickUp
@@ -274,7 +222,7 @@ export function TeakToggle({ date, initialLeg, initialTeakNight, profileId }: Te
           Pick Up
         </button>
         <button
-          onClick={() => onPickUpOrDropOffTap("Drop off")}
+          onClick={() => onButtonTap("Drop off")}
           disabled={saving}
           className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
             isDropOff
@@ -284,74 +232,112 @@ export function TeakToggle({ date, initialLeg, initialTeakNight, profileId }: Te
         >
           Drop Off
         </button>
-        <button
-          onClick={handleTeakNightToggle}
-          disabled={saving}
-          className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${
-            teakNight
-              ? "bg-green-900/60 text-green-300"
-              : "border border-gray-600 text-gray-500 hover:border-green-700 hover:text-green-400"
-          } disabled:opacity-50`}
-        >
-          Teak Night
-        </button>
       </div>
 
-      {leg && !formOpen && (
-        <div className="mt-2">
-          <TravelDetailsSection
-            leg={leg}
-            footer={
-              <button
-                onClick={() => setFormOpen(true)}
-                className="text-[10px] text-teal-400 hover:text-teal-300"
-              >
-                Edit
-              </button>
-            }
-          />
-        </div>
-      )}
+      <LegSection
+        leg={pickup}
+        formOpen={pickupFormOpen}
+        fields={pickupFields}
+        setFields={setPickupFields}
+        onEdit={() => setPickupFormOpen(true)}
+        onCancel={() => handleCancel("Pick up")}
+        onSave={() => handleSave("Pick up")}
+        saving={saving}
+      />
+      <LegSection
+        leg={dropoff}
+        formOpen={dropoffFormOpen}
+        fields={dropoffFields}
+        setFields={setDropoffFields}
+        onEdit={() => setDropoffFormOpen(true)}
+        onCancel={() => handleCancel("Drop off")}
+        onSave={() => handleSave("Drop off")}
+        saving={saving}
+      />
 
-      {leg && formOpen && (
-        <div className="mt-2 space-y-2 rounded-md bg-gray-950/50 p-2.5">
-          {fieldDefs.map((def) => (
-            <TeakField
-              key={def.key}
-              label={def.label}
-              value={fields[def.key]}
-              onChange={(value) => setFields((prev) => ({ ...prev, [def.key]: value }))}
-            />
-          ))}
-          <div className="mt-1 flex gap-2">
-            <button
-              onClick={handleCancel}
-              disabled={saving}
-              className="shrink-0 rounded border border-gray-600 px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:border-gray-500 hover:text-gray-200 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex-1 rounded bg-teal-700 px-3 py-1.5 text-xs font-medium text-teal-100 transition-colors hover:bg-teal-600 disabled:opacity-50"
-            >
-              {saving ? "Saving…" : "Save"}
-            </button>
-          </div>
-        </div>
-      )}
-      {dialogCopyResolved && (
+      {pendingRemoval && (
         <ConfirmDialog
           open={true}
-          title={dialogCopyResolved.title}
-          body={dialogCopyResolved.body}
-          confirmLabel={dialogCopyResolved.confirmLabel}
-          variant={dialogCopyResolved.variant}
+          title={`Remove ${actionLabel(pendingRemoval)}?`}
+          body="This will delete the location, time, companion, and flight details you've entered for this date."
+          confirmLabel={`Remove ${actionLabel(pendingRemoval)}`}
+          variant="destructive"
           onConfirm={confirmPending}
           onCancel={cancelPending}
         />
       )}
+    </div>
+  );
+}
+
+function LegSection({
+  leg,
+  formOpen,
+  fields,
+  setFields,
+  onEdit,
+  onCancel,
+  onSave,
+  saving,
+}: {
+  leg: TravelLeg | undefined;
+  formOpen: boolean;
+  fields: FieldState;
+  setFields: (updater: (prev: FieldState) => FieldState) => void;
+  onEdit: () => void;
+  onCancel: () => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  if (!leg) return null;
+
+  if (!formOpen) {
+    return (
+      <div className="mt-2">
+        <TravelDetailsSection
+          leg={leg}
+          footer={
+            <button
+              onClick={onEdit}
+              className="text-[10px] text-teal-400 hover:text-teal-300"
+            >
+              Edit
+            </button>
+          }
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-2 space-y-2 rounded-md bg-gray-950/50 p-2.5">
+      <div className="text-[10px] font-medium uppercase text-teal-400">
+        {leg.action === "Pick up" ? "Teak Pick Up" : "Teak Drop Off"}
+      </div>
+      {fieldDefs.map((def) => (
+        <TeakField
+          key={def.key}
+          label={def.label}
+          value={fields[def.key]}
+          onChange={(value) => setFields((prev) => ({ ...prev, [def.key]: value }))}
+        />
+      ))}
+      <div className="mt-1 flex gap-2">
+        <button
+          onClick={onCancel}
+          disabled={saving}
+          className="shrink-0 rounded border border-gray-600 px-3 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:border-gray-500 hover:text-gray-200 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onSave}
+          disabled={saving}
+          className="flex-1 rounded bg-teal-700 px-3 py-1.5 text-xs font-medium text-teal-100 transition-colors hover:bg-teal-600 disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
     </div>
   );
 }

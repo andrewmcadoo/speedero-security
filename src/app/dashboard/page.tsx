@@ -7,24 +7,32 @@ import { EpoDashboard } from "./epo-dashboard";
 import { ManagementDashboard } from "./management-dashboard";
 import { redirect } from "next/navigation";
 
+interface DateLegs {
+  pickup?: TravelLeg;
+  dropoff?: TravelLeg;
+}
+
 function toTravelLegsMap(
   rows: { date: string; action: string; location: string; time: string; companion: string; companion_pre_position_flight: string; teak_flight: string; companion_return_flight: string }[]
-): Map<string, TravelLeg> {
-  return new Map(
-    rows.map((tl) => [
-      tl.date,
-      {
-        date: tl.date,
-        action: tl.action as TravelLeg["action"],
-        location: tl.location,
-        time: tl.time,
-        companion: tl.companion,
-        companionPrePositionFlight: tl.companion_pre_position_flight,
-        teakFlight: tl.teak_flight,
-        companionReturnFlight: tl.companion_return_flight,
-      },
-    ])
-  );
+): Map<string, DateLegs> {
+  const map = new Map<string, DateLegs>();
+  for (const tl of rows) {
+    const leg: TravelLeg = {
+      date: tl.date,
+      action: tl.action as TravelLeg["action"],
+      location: tl.location,
+      time: tl.time,
+      companion: tl.companion,
+      companionPrePositionFlight: tl.companion_pre_position_flight,
+      teakFlight: tl.teak_flight,
+      companionReturnFlight: tl.companion_return_flight,
+    };
+    const existing = map.get(tl.date) ?? {};
+    if (leg.action === "Pick up") existing.pickup = leg;
+    else if (leg.action === "Drop off") existing.dropoff = leg;
+    map.set(tl.date, existing);
+  }
+  return map;
 }
 
 async function fetchScheduleData(): Promise<ScheduleEntry[]> {
@@ -59,9 +67,9 @@ export default async function DashboardPage() {
 
   // Build date settings map
   const settingsMap = new Map(
-    dateSettings.map((ds: { date: string; detail_level: string; teak_night: boolean }) => [
+    dateSettings.map((ds: { date: string; detail_level: string }) => [
       ds.date,
-      { detailLevel: ds.detail_level as DetailLevel, teakNight: ds.teak_night },
+      { detailLevel: ds.detail_level as DetailLevel },
     ])
   );
 
@@ -95,14 +103,15 @@ export default async function DashboardPage() {
       .filter((s) => s.date >= today)
       .map((s) => {
         const setting = settingsMap.get(s.date);
+        const legs = travelLegsByDate.get(s.date);
         return {
           ...s,
-          teakNight: setting?.teakNight ?? false,
           detailLevel: setting?.detailLevel ?? "single",
           assignedEpos: assignmentsByDate.get(s.date) ?? [],
           isThisWeek: isThisWeek(s.date),
           isNextWeek: isNextWeek(s.date),
-          travelLeg: travelLegsByDate.get(s.date),
+          pickupLeg: legs?.pickup,
+          dropoffLeg: legs?.dropoff,
         };
       });
 
@@ -152,18 +161,18 @@ export default async function DashboardPage() {
 
   const entries: DashboardEntry[] = schedule.map((s) => {
     const setting = settingsMap.get(s.date);
+    const legs = assignedDateSet.has(s.date)
+      ? travelLegsByDate.get(s.date)
+      : undefined;
     return {
       ...s,
-      teakNight: setting?.teakNight ?? false,
       detailLevel: setting?.detailLevel ?? "single",
       assignedEpos: assignmentsByDate.get(s.date) ?? [],
       isPast: s.date < today,
       isThisWeek: isThisWeek(s.date),
       isNextWeek: isNextWeek(s.date),
-      // Only attach travelLeg when this EPO is assigned to this date.
-      travelLeg: assignedDateSet.has(s.date)
-        ? travelLegsByDate.get(s.date)
-        : undefined,
+      pickupLeg: legs?.pickup,
+      dropoffLeg: legs?.dropoff,
     };
   });
 

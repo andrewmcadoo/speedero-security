@@ -49,12 +49,12 @@ export function ScheduleDetailCard({ entry }: { entry: DashboardEntry }) {
                 TEAK NIGHT
               </span>
             )}
-            {entry.travelLeg?.action === "Pick up" && (
+            {entry.pickupLeg && (
               <span className="shrink-0 rounded bg-green-900/60 px-1.5 py-0.5 text-[10px] font-medium text-green-300">
                 PICK UP
               </span>
             )}
-            {entry.travelLeg?.action === "Drop off" && (
+            {entry.dropoffLeg && (
               <span className="shrink-0 rounded bg-rose-900/60 px-1.5 py-0.5 text-[10px] font-medium text-rose-300">
                 DROP OFF
               </span>
@@ -139,7 +139,8 @@ export function ScheduleDetailCard({ entry }: { entry: DashboardEntry }) {
             </div>
           )}
           <FlightDetailsSection entry={entry} />
-          {entry.travelLeg && <TravelDetailsSection leg={entry.travelLeg} />}
+          {entry.pickupLeg && <TravelDetailsSection leg={entry.pickupLeg} />}
+          {entry.dropoffLeg && <TravelDetailsSection leg={entry.dropoffLeg} />}
         </div>
       )}
     </div>
