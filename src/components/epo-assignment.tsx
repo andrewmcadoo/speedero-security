@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getEpoColor } from "@/lib/epo-colors";
+import { ConfirmDialog } from "./confirm-dialog";
 
 interface EpoInfo {
   id: string;
@@ -24,6 +25,7 @@ export function EpoAssignment({
 }) {
   const [assigned, setAssigned] = useState(initialAssigned);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [pendingRemoval, setPendingRemoval] = useState<EpoInfo | null>(null);
   const router = useRouter();
 
   // Sync local state when server data changes (e.g. after router.refresh())
@@ -87,7 +89,7 @@ export function EpoAssignment({
             >
               {epo.fullName || epo.email}
               <button
-                onClick={() => handleRemove(epo.id)}
+                onClick={() => setPendingRemoval(epo)}
                 className="opacity-60 transition-opacity hover:opacity-100"
               >
                 &times;
@@ -120,6 +122,21 @@ export function EpoAssignment({
           )}
         </div>
       </div>
+      {pendingRemoval && (
+        <ConfirmDialog
+          open={true}
+          title="Unassign EPO?"
+          body={`${pendingRemoval.fullName || pendingRemoval.email} will no longer be assigned to this date.`}
+          confirmLabel="Unassign"
+          variant="destructive"
+          onConfirm={() => {
+            const epoId = pendingRemoval.id;
+            setPendingRemoval(null);
+            void handleRemove(epoId);
+          }}
+          onCancel={() => setPendingRemoval(null)}
+        />
+      )}
     </div>
   );
 }
