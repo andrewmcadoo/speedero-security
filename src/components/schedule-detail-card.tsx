@@ -8,6 +8,7 @@ import { DETAIL_LEVEL_LABELS } from "@/lib/detail-levels";
 import { getEpoColor } from "@/lib/epo-colors";
 import { TravelDetailsSection } from "./travel-details-section";
 import { FlightDetailsSection } from "./flight-details-section";
+import { TransitionsSection } from "./transitions-section";
 
 const labelClass = "text-[10px] text-gray-500 mb-0.5";
 
@@ -139,6 +140,7 @@ export function ScheduleDetailCard({ entry }: { entry: DashboardEntry }) {
             </div>
           )}
           <FlightDetailsSection entry={entry} />
+          <TransitionsSection transitions={entry.transitions} />
           {entry.pickupLeg && <TravelDetailsSection leg={entry.pickupLeg} />}
           {entry.dropoffLeg && <TravelDetailsSection leg={entry.dropoffLeg} />}
         </div>
