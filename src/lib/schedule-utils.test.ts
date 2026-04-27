@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { formatDateHeader, getAnchorDates, isoDateInTz } from "./schedule-utils";
+import { formatDateHeader, formatTimeInTz, getAnchorDates, isoDateInTz } from "./schedule-utils";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -118,5 +118,26 @@ describe("isoDateInTz", () => {
   test("handles DST spring-forward day", () => {
     // 2026-03-08 is the US DST spring-forward day. 2026-03-08T03:30-07:00 (after DST starts) is March 8 in LA.
     expect(isoDateInTz("2026-03-08T03:30:00-07:00", "America/Los_Angeles")).toBe("2026-03-08");
+  });
+});
+
+describe("formatTimeInTz", () => {
+  test("formats a morning time in the event's TZ", () => {
+    expect(formatTimeInTz("2026-04-30T09:30:00-07:00", "America/Los_Angeles")).toBe("9:30 AM");
+  });
+
+  test("formats an afternoon time", () => {
+    expect(formatTimeInTz("2026-04-30T14:05:00-07:00", "America/Los_Angeles")).toBe("2:05 PM");
+  });
+
+  test("renders the same instant differently in two zones", () => {
+    // Same instant: 06:30 UTC. In Tokyo that's 15:30; in LA it's 23:30 of the prior day.
+    const iso = "2026-05-01T06:30:00Z";
+    expect(formatTimeInTz(iso, "Asia/Tokyo")).toBe("3:30 PM");
+    expect(formatTimeInTz(iso, "America/Los_Angeles")).toBe("11:30 PM");
+  });
+
+  test("pads single-digit minutes", () => {
+    expect(formatTimeInTz("2026-04-30T09:05:00-07:00", "America/Los_Angeles")).toBe("9:05 AM");
   });
 });

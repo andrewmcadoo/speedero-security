@@ -170,3 +170,18 @@ export function isoDateInTz(iso: string, tz: string): string {
   });
   return fmt.format(new Date(iso));
 }
+
+/**
+ * Format an ISO 8601 instant as a 12-hour clock string ("9:30 AM") in the
+ * given IANA timezone. Used by the transitions UI to render event start
+ * times in the principal's local zone.
+ */
+export function formatTimeInTz(iso: string, tz: string): string {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  return fmt.format(new Date(iso));
+}
