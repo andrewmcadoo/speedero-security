@@ -1,8 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { getProfile, getAssignmentsForUser, getDateSettings, getAllAssignmentsWithProfiles, getAllEpos, getTravelLegs } from "@/lib/supabase/queries";
 import { fetchSchedule } from "@/lib/google-sheets";
-import type { ScheduleEntry, DashboardEntry, DetailLevel, TravelLeg } from "@/types/schedule";
-import { isThisWeek, isNextWeek, getAnchorDates } from "@/lib/schedule-utils";
+import { fetchTransitions } from "@/lib/google-calendar";
+import type { ScheduleEntry, DashboardEntry, DetailLevel, TravelLeg, Transition } from "@/types/schedule";
+import { isThisWeek, isNextWeek, getAnchorDates, isoDateInTz } from "@/lib/schedule-utils";
 import { EpoDashboard } from "./epo-dashboard";
 import { ManagementDashboard } from "./management-dashboard";
 import { redirect } from "next/navigation";
@@ -44,6 +45,41 @@ async function fetchScheduleData(): Promise<ScheduleEntry[]> {
   }
 }
 
+async function fetchTransitionsData(
+  range: { startDate: string; endDate: string }
+): Promise<Transition[]> {
+  try {
+    return await fetchTransitions(range);
+  } catch (error) {
+    console.error("fetchTransitions failed:", error);
+    return [];
+  }
+}
+
+function buildTransitionsByDate(
+  transitions: Transition[],
+  knownDates: Set<string>
+): Map<string, Transition[]> {
+  const map = new Map<string, Transition[]>();
+  let orphanCount = 0;
+  for (const t of transitions) {
+    const date = isoDateInTz(t.startsAt, t.tz);
+    if (!knownDates.has(date)) {
+      orphanCount++;
+      continue;
+    }
+    const list = map.get(date) ?? [];
+    list.push(t);
+    map.set(date, list);
+  }
+  if (orphanCount > 0) {
+    console.warn(
+      `[transitions] dropped ${orphanCount} transition(s) on dates with no schedule row`
+    );
+  }
+  return map;
+}
+
 export default async function DashboardPage() {
   const supabase = await createClient();
 
@@ -64,6 +100,18 @@ export default async function DashboardPage() {
     fetchScheduleData(),
     getDateSettings(supabase),
   ]);
+
+  // Kick off the transitions fetch in parallel with the branch-specific
+  // Supabase fetches further down. Date range: today through the latest
+  // sheet date. If the schedule fetch failed/returned empty, skip the
+  // calendar call entirely.
+  const transitionsPromise: Promise<Transition[]> =
+    schedule.length === 0
+      ? Promise.resolve([])
+      : fetchTransitionsData({
+          startDate: today,
+          endDate: schedule.reduce((max, s) => (s.date > max ? s.date : max), today),
+        });
 
   // Build date settings map
   const settingsMap = new Map(
@@ -97,6 +145,10 @@ export default async function DashboardPage() {
       assignmentsByDate.set(a.date, existing);
     }
 
+    const transitions = await transitionsPromise;
+    const knownDates = new Set(schedule.map((s) => s.date));
+    const transitionsByDate = buildTransitionsByDate(transitions, knownDates);
+
     const travelLegsByDate = toTravelLegsMap(travelLegsRaw);
 
     const entries: DashboardEntry[] = schedule
@@ -112,7 +164,7 @@ export default async function DashboardPage() {
           isNextWeek: isNextWeek(s.date),
           pickupLeg: legs?.pickup,
           dropoffLeg: legs?.dropoff,
-          transitions: [],
+          transitions: transitionsByDate.get(s.date) ?? [],
         };
       });
 
@@ -137,6 +189,10 @@ export default async function DashboardPage() {
     getAssignmentsForUser(supabase, profile.id),
     getTravelLegs(supabase),
   ]);
+
+  const transitions = await transitionsPromise;
+  const knownDates = new Set(schedule.map((s) => s.date));
+  const transitionsByDate = buildTransitionsByDate(transitions, knownDates);
 
   const travelLegsByDate = toTravelLegsMap(travelLegsRaw);
 
@@ -174,7 +230,7 @@ export default async function DashboardPage() {
       isNextWeek: isNextWeek(s.date),
       pickupLeg: legs?.pickup,
       dropoffLeg: legs?.dropoff,
-      transitions: [],
+      transitions: transitionsByDate.get(s.date) ?? [],
     };
   });
 
