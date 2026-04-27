@@ -112,6 +112,7 @@ export default async function DashboardPage() {
           isNextWeek: isNextWeek(s.date),
           pickupLeg: legs?.pickup,
           dropoffLeg: legs?.dropoff,
+          transitions: [],
         };
       });
 
@@ -173,6 +174,7 @@ export default async function DashboardPage() {
       isNextWeek: isNextWeek(s.date),
       pickupLeg: legs?.pickup,
       dropoffLeg: legs?.dropoff,
+      transitions: [],
     };
   });
 
