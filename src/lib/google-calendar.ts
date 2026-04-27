@@ -1,3 +1,5 @@
+import type { Principal, Transition } from "@/types/schedule";
+
 const TRANSITION_PREFIX_RE = /^\s*tt:\s*/i;
 
 /**
@@ -10,4 +12,47 @@ export function stripTransitionPrefix(title: string): string | null {
   if (!TRANSITION_PREFIX_RE.test(title)) return null;
   const stripped = title.replace(TRANSITION_PREFIX_RE, "").trim();
   return stripped === "" ? null : stripped;
+}
+
+/**
+ * Subset of the Google Calendar API event shape we rely on.
+ * Full schema: https://developers.google.com/calendar/api/v3/reference/events
+ */
+export interface CalendarApiEvent {
+  id?: string;
+  summary?: string;
+  start?: {
+    date?: string;       // YYYY-MM-DD for all-day events
+    dateTime?: string;   // RFC3339 for timed events
+    timeZone?: string;   // IANA TZ name
+  };
+}
+
+/**
+ * Convert a slice of Calendar API events for a single principal into
+ * `Transition` objects. Drops all-day events, untitled events, events
+ * whose title doesn't start with `TT:`, and events whose post-strip
+ * title is empty.
+ */
+export function parseCalendarEvents(
+  person: Principal,
+  events: CalendarApiEvent[]
+): Transition[] {
+  const transitions: Transition[] = [];
+  for (const event of events) {
+    if (!event.id) continue;
+    if (!event.summary) continue;
+    const startsAt = event.start?.dateTime;
+    if (!startsAt) continue; // all-day or malformed
+    const title = stripTransitionPrefix(event.summary);
+    if (title === null) continue;
+    transitions.push({
+      person,
+      title,
+      startsAt,
+      tz: event.start?.timeZone ?? "UTC",
+      eventId: event.id,
+    });
+  }
+  return transitions;
 }
