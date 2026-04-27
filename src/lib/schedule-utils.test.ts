@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { formatDateHeader, getAnchorDates } from "./schedule-utils";
+import { formatDateHeader, getAnchorDates, isoDateInTz } from "./schedule-utils";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -93,5 +93,30 @@ describe("formatDateHeader", () => {
     expect(formatDateHeader("2026-04-20", "2026-04-14", "2026-04-15")).toBe(
       "MONDAY · April 20"
     );
+  });
+});
+
+describe("isoDateInTz", () => {
+  test("returns wall-clock date in the given timezone", () => {
+    // 2026-04-30T09:30:00-07:00 = 2026-04-30 16:30 UTC
+    expect(isoDateInTz("2026-04-30T09:30:00-07:00", "America/Los_Angeles")).toBe("2026-04-30");
+  });
+
+  test("buckets to event's TZ date even when UTC date differs", () => {
+    // 2026-04-30T23:30-07:00 = 2026-05-01 06:30 UTC
+    // In LA the wall clock is still April 30; in UTC it's May 1.
+    expect(isoDateInTz("2026-04-30T23:30:00-07:00", "America/Los_Angeles")).toBe("2026-04-30");
+    expect(isoDateInTz("2026-04-30T23:30:00-07:00", "UTC")).toBe("2026-05-01");
+  });
+
+  test("handles same instant in two different zones", () => {
+    // 2026-05-01T15:30:00+09:00 (Tokyo) = 2026-04-30T23:30 PT = 2026-05-01 06:30 UTC
+    expect(isoDateInTz("2026-05-01T15:30:00+09:00", "Asia/Tokyo")).toBe("2026-05-01");
+    expect(isoDateInTz("2026-05-01T15:30:00+09:00", "America/Los_Angeles")).toBe("2026-04-30");
+  });
+
+  test("handles DST spring-forward day", () => {
+    // 2026-03-08 is the US DST spring-forward day. 2026-03-08T03:30-07:00 (after DST starts) is March 8 in LA.
+    expect(isoDateInTz("2026-03-08T03:30:00-07:00", "America/Los_Angeles")).toBe("2026-03-08");
   });
 });

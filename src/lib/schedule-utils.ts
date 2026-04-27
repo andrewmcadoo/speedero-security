@@ -153,3 +153,20 @@ export function isNextWeek(dateStr: string): boolean {
   end.setDate(end.getDate() + 13);
   return date >= start && date <= end;
 }
+
+/**
+ * Format an ISO 8601 instant as a YYYY-MM-DD calendar date in the given
+ * IANA timezone (e.g. "America/Los_Angeles", "Asia/Tokyo", "UTC").
+ *
+ * Used to bucket calendar events by the date the event "owner" sees on
+ * their phone, regardless of UTC offset or viewer locale.
+ */
+export function isoDateInTz(iso: string, tz: string): string {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  return fmt.format(new Date(iso));
+}
