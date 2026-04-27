@@ -1,3 +1,4 @@
+import { GoogleAuth } from "google-auth-library";
 import type { Principal, Transition } from "@/types/schedule";
 
 const TRANSITION_PREFIX_RE = /^\s*tt:\s*/i;
@@ -84,4 +85,93 @@ export function getConfiguredPrincipals(): ConfiguredPrincipal[] {
     out.push({ person, calendarId });
   }
   return out;
+}
+
+const CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"];
+
+function getAuth() {
+  return new GoogleAuth({
+    credentials: {
+      client_email: process.env.GOOGLE_SHEETS_CLIENT_EMAIL,
+      private_key: process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    },
+    scopes: CALENDAR_SCOPES,
+  });
+}
+
+/**
+ * Pad a `YYYY-MM-DD` date string by ±1 day and return RFC3339 UTC bounds.
+ * The padding absorbs event-TZ vs. UTC date-boundary skew so events that
+ * fall on the requested calendar date in their own TZ are not dropped by
+ * the API's UTC-based timeMin/timeMax filter.
+ */
+function paddedRfc3339Bounds(startDate: string, endDate: string): { timeMin: string; timeMax: string } {
+  const start = new Date(`${startDate}T00:00:00Z`);
+  start.setUTCDate(start.getUTCDate() - 1);
+  const end = new Date(`${endDate}T23:59:59Z`);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return { timeMin: start.toISOString(), timeMax: end.toISOString() };
+}
+
+async function fetchPrincipalTransitions(
+  accessToken: string,
+  principal: ConfiguredPrincipal,
+  bounds: { timeMin: string; timeMax: string }
+): Promise<Transition[]> {
+  const params = new URLSearchParams({
+    timeMin: bounds.timeMin,
+    timeMax: bounds.timeMax,
+    singleEvents: "true",
+    orderBy: "startTime",
+    q: "TT:",
+    maxResults: "2500",
+  });
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+    principal.calendarId
+  )}/events?${params.toString()}`;
+
+  try {
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) {
+      console.error(
+        `[transitions] Calendar fetch for ${principal.person} failed: ${response.status} ${response.statusText}`
+      );
+      return [];
+    }
+    const data = (await response.json()) as { items?: CalendarApiEvent[] };
+    return parseCalendarEvents(principal.person, data.items ?? []);
+  } catch (error) {
+    console.error(`[transitions] Calendar fetch for ${principal.person} threw:`, error);
+    return [];
+  }
+}
+
+/**
+ * Fetch TT: transitions across all configured principals' Google Calendars
+ * for the given inclusive date range. Returns a flat array sorted ascending
+ * by startsAt. Per-principal failures degrade to an empty contribution from
+ * that principal; the call as a whole only throws if obtaining the access
+ * token fails.
+ */
+export async function fetchTransitions(
+  range: { startDate: string; endDate: string }
+): Promise<Transition[]> {
+  const principals = getConfiguredPrincipals();
+  if (principals.length === 0) return [];
+
+  const auth = getAuth();
+  const accessToken = await auth.getAccessToken();
+  if (!accessToken) throw new Error("Missing Google Calendar access token");
+
+  const bounds = paddedRfc3339Bounds(range.startDate, range.endDate);
+
+  const perPrincipal = await Promise.all(
+    principals.map((p) => fetchPrincipalTransitions(accessToken, p, bounds))
+  );
+
+  const merged = perPrincipal.flat();
+  merged.sort((a, b) => (a.startsAt < b.startsAt ? -1 : a.startsAt > b.startsAt ? 1 : 0));
+  return merged;
 }
