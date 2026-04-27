@@ -56,3 +56,32 @@ export function parseCalendarEvents(
   }
   return transitions;
 }
+
+const PRINCIPAL_CALENDARS: { person: Principal; envVar: string }[] = [
+  { person: "greg", envVar: "GOOGLE_CALENDAR_ID_GREG" },
+  { person: "krista", envVar: "GOOGLE_CALENDAR_ID_KRISTA" },
+];
+
+export interface ConfiguredPrincipal {
+  person: Principal;
+  calendarId: string;
+}
+
+/**
+ * Read the calendar ID env vars and return one entry per principal that
+ * has a non-empty value. Logs a warning for each missing principal so
+ * preview environments (which may only have one calendar shared) don't
+ * silently drop transitions for the missing one.
+ */
+export function getConfiguredPrincipals(): ConfiguredPrincipal[] {
+  const out: ConfiguredPrincipal[] = [];
+  for (const { person, envVar } of PRINCIPAL_CALENDARS) {
+    const calendarId = process.env[envVar];
+    if (!calendarId) {
+      console.warn(`[transitions] ${envVar} is not set; skipping ${person}`);
+      continue;
+    }
+    out.push({ person, calendarId });
+  }
+  return out;
+}

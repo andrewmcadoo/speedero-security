@@ -1,5 +1,5 @@
-import { describe, expect, test } from "bun:test";
-import { stripTransitionPrefix, parseCalendarEvents, type CalendarApiEvent } from "./google-calendar";
+import { describe, expect, test, afterEach, beforeEach } from "bun:test";
+import { stripTransitionPrefix, parseCalendarEvents, getConfiguredPrincipals, type CalendarApiEvent } from "./google-calendar";
 import type { Transition } from "@/types/schedule";
 
 describe("stripTransitionPrefix", () => {
@@ -116,5 +116,63 @@ describe("parseCalendarEvents", () => {
       { summary: "TT: Office", start: { dateTime: "2026-04-30T09:30:00-07:00", timeZone: "America/Los_Angeles" } } as CalendarApiEvent,
     ]);
     expect(result).toEqual([]);
+  });
+});
+
+describe("getConfiguredPrincipals", () => {
+  const originalGreg = process.env.GOOGLE_CALENDAR_ID_GREG;
+  const originalKrista = process.env.GOOGLE_CALENDAR_ID_KRISTA;
+  let warnings: unknown[][] = [];
+  let originalWarn: typeof console.warn;
+
+  beforeEach(() => {
+    delete process.env.GOOGLE_CALENDAR_ID_GREG;
+    delete process.env.GOOGLE_CALENDAR_ID_KRISTA;
+    warnings = [];
+    originalWarn = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args);
+    };
+  });
+
+  afterEach(() => {
+    if (originalGreg !== undefined) process.env.GOOGLE_CALENDAR_ID_GREG = originalGreg;
+    else delete process.env.GOOGLE_CALENDAR_ID_GREG;
+    if (originalKrista !== undefined) process.env.GOOGLE_CALENDAR_ID_KRISTA = originalKrista;
+    else delete process.env.GOOGLE_CALENDAR_ID_KRISTA;
+    console.warn = originalWarn;
+  });
+
+  test("returns both principals when both env vars are set", () => {
+    process.env.GOOGLE_CALENDAR_ID_GREG = "greg@example.com";
+    process.env.GOOGLE_CALENDAR_ID_KRISTA = "krista@example.com";
+    expect(getConfiguredPrincipals()).toEqual([
+      { person: "greg", calendarId: "greg@example.com" },
+      { person: "krista", calendarId: "krista@example.com" },
+    ]);
+    expect(warnings).toEqual([]);
+  });
+
+  test("skips and warns about a missing principal", () => {
+    process.env.GOOGLE_CALENDAR_ID_GREG = "greg@example.com";
+    // Krista's env var unset
+    const result = getConfiguredPrincipals();
+    expect(result).toEqual([{ person: "greg", calendarId: "greg@example.com" }]);
+    expect(warnings.length).toBe(1);
+    expect(String(warnings[0][0])).toContain("krista");
+  });
+
+  test("skips and warns when env var is empty string", () => {
+    process.env.GOOGLE_CALENDAR_ID_GREG = "";
+    process.env.GOOGLE_CALENDAR_ID_KRISTA = "krista@example.com";
+    const result = getConfiguredPrincipals();
+    expect(result).toEqual([{ person: "krista", calendarId: "krista@example.com" }]);
+    expect(warnings.length).toBe(1);
+    expect(String(warnings[0][0])).toContain("greg");
+  });
+
+  test("returns empty array when neither is configured", () => {
+    expect(getConfiguredPrincipals()).toEqual([]);
+    expect(warnings.length).toBe(2);
   });
 });
