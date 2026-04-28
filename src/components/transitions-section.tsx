@@ -22,24 +22,29 @@ export function TransitionsSection({ transitions }: TransitionsSectionProps) {
   if (visible.length === 0) return null;
 
   return (
-    <div className="space-y-3">
-      {visible.map(({ person, label, items }) => (
-        <div key={person}>
-          <div className="mb-1 text-[10px] uppercase tracking-wide text-gray-500">
-            {label}
+    <div className="border-t border-gray-700 pt-2.5">
+      <div className="mb-1.5 text-[10px] uppercase tracking-wide text-gray-500">
+        TRANSITIONS
+      </div>
+      <div className="space-y-2">
+        {visible.map(({ person, label, items }) => (
+          <div key={person}>
+            <div className="mb-0.5 text-[9px] uppercase tracking-wide text-gray-500">
+              {label}
+            </div>
+            <ul className="space-y-1">
+              {items.map((t) => (
+                <li key={t.eventId} className="flex items-baseline gap-2">
+                  <span className="shrink-0 font-mono text-[11px] text-gray-400">
+                    {formatTimeInTz(t.startsAt, t.tz)}
+                  </span>
+                  <span className="text-xs text-gray-100">{t.title}</span>
+                </li>
+              ))}
+            </ul>
           </div>
-          <ul className="space-y-1">
-            {items.map((t) => (
-              <li key={t.eventId} className="flex items-baseline gap-2">
-                <span className="shrink-0 font-mono text-[11px] text-gray-400">
-                  {formatTimeInTz(t.startsAt, t.tz)}
-                </span>
-                <span className="text-xs text-gray-100">{t.title}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

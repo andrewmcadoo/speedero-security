@@ -206,9 +206,7 @@ export function TeakToggle({ date, initialPickup, initialDropoff, profileId }: T
 
   return (
     <div className="border-t border-gray-700 pt-2.5">
-      <div className="mb-1.5">
-        <span className="text-[10px] text-gray-500">TEAK</span>
-      </div>
+      <div className="mb-1.5 text-[10px] text-gray-500">TEAK</div>
       <div className="flex flex-wrap gap-1.5">
         <button
           onClick={() => onButtonTap("Pick up")}
