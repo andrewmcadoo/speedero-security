@@ -65,24 +65,33 @@ const PRINCIPAL_CALENDARS: { person: Principal; envVar: string }[] = [
 
 export interface ConfiguredPrincipal {
   person: Principal;
-  calendarId: string;
+  calendarIds: string[];
 }
 
 /**
  * Read the calendar ID env vars and return one entry per principal that
- * has a non-empty value. Logs a warning for each missing principal so
- * preview environments (which may only have one calendar shared) don't
- * silently drop transitions for the missing one.
+ * has at least one non-empty value. Each env var accepts a comma-separated
+ * list, so a single principal can roll up multiple calendars (work +
+ * personal etc.) into one subsection. Logs a warning for each missing /
+ * empty principal so preview environments don't silently drop transitions.
  */
 export function getConfiguredPrincipals(): ConfiguredPrincipal[] {
   const out: ConfiguredPrincipal[] = [];
   for (const { person, envVar } of PRINCIPAL_CALENDARS) {
-    const calendarId = process.env[envVar];
-    if (!calendarId) {
+    const raw = process.env[envVar];
+    if (!raw) {
       console.warn(`[transitions] ${envVar} is not set; skipping ${person}`);
       continue;
     }
-    out.push({ person, calendarId });
+    const calendarIds = raw
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => id !== "");
+    if (calendarIds.length === 0) {
+      console.warn(`[transitions] ${envVar} has no non-empty calendar IDs; skipping ${person}`);
+      continue;
+    }
+    out.push({ person, calendarIds });
   }
   return out;
 }
@@ -113,9 +122,10 @@ function paddedRfc3339Bounds(startDate: string, endDate: string): { timeMin: str
   return { timeMin: start.toISOString(), timeMax: end.toISOString() };
 }
 
-async function fetchPrincipalTransitions(
+async function fetchSingleCalendar(
   accessToken: string,
-  principal: ConfiguredPrincipal,
+  person: Principal,
+  calendarId: string,
   bounds: { timeMin: string; timeMax: string }
 ): Promise<Transition[]> {
   const params = new URLSearchParams({
@@ -127,7 +137,7 @@ async function fetchPrincipalTransitions(
     maxResults: "2500",
   });
   const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
-    principal.calendarId
+    calendarId
   )}/events?${params.toString()}`;
 
   try {
@@ -136,14 +146,14 @@ async function fetchPrincipalTransitions(
     });
     if (!response.ok) {
       console.error(
-        `[transitions] Calendar fetch for ${principal.person} failed: ${response.status} ${response.statusText}`
+        `[transitions] Calendar fetch for ${person} (${calendarId}) failed: ${response.status} ${response.statusText}`
       );
       return [];
     }
     const data = (await response.json()) as { items?: CalendarApiEvent[] };
-    return parseCalendarEvents(principal.person, data.items ?? []);
+    return parseCalendarEvents(person, data.items ?? []);
   } catch (error) {
-    console.error(`[transitions] Calendar fetch for ${principal.person} threw:`, error);
+    console.error(`[transitions] Calendar fetch for ${person} (${calendarId}) threw:`, error);
     return [];
   }
 }
@@ -167,11 +177,14 @@ export async function fetchTransitions(
 
   const bounds = paddedRfc3339Bounds(range.startDate, range.endDate);
 
-  const perPrincipal = await Promise.all(
-    principals.map((p) => fetchPrincipalTransitions(accessToken, p, bounds))
+  const fetches = principals.flatMap((p) =>
+    p.calendarIds.map((calendarId) =>
+      fetchSingleCalendar(accessToken, p.person, calendarId, bounds)
+    )
   );
+  const results = await Promise.all(fetches);
 
-  const merged = perPrincipal.flat();
+  const merged = results.flat();
   merged.sort((a, b) => (a.startsAt < b.startsAt ? -1 : a.startsAt > b.startsAt ? 1 : 0));
   return merged;
 }

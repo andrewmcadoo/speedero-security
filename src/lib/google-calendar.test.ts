@@ -147,8 +147,8 @@ describe("getConfiguredPrincipals", () => {
     process.env.GOOGLE_CALENDAR_ID_GREG = "greg@example.com";
     process.env.GOOGLE_CALENDAR_ID_KRISTA = "krista@example.com";
     expect(getConfiguredPrincipals()).toEqual([
-      { person: "greg", calendarId: "greg@example.com" },
-      { person: "krista", calendarId: "krista@example.com" },
+      { person: "greg", calendarIds: ["greg@example.com"] },
+      { person: "krista", calendarIds: ["krista@example.com"] },
     ]);
     expect(warnings).toEqual([]);
   });
@@ -157,7 +157,7 @@ describe("getConfiguredPrincipals", () => {
     process.env.GOOGLE_CALENDAR_ID_GREG = "greg@example.com";
     // Krista's env var unset
     const result = getConfiguredPrincipals();
-    expect(result).toEqual([{ person: "greg", calendarId: "greg@example.com" }]);
+    expect(result).toEqual([{ person: "greg", calendarIds: ["greg@example.com"] }]);
     expect(warnings.length).toBe(1);
     expect(String(warnings[0][0])).toContain("krista");
   });
@@ -166,7 +166,7 @@ describe("getConfiguredPrincipals", () => {
     process.env.GOOGLE_CALENDAR_ID_GREG = "";
     process.env.GOOGLE_CALENDAR_ID_KRISTA = "krista@example.com";
     const result = getConfiguredPrincipals();
-    expect(result).toEqual([{ person: "krista", calendarId: "krista@example.com" }]);
+    expect(result).toEqual([{ person: "krista", calendarIds: ["krista@example.com"] }]);
     expect(warnings.length).toBe(1);
     expect(String(warnings[0][0])).toContain("greg");
   });
@@ -174,5 +174,31 @@ describe("getConfiguredPrincipals", () => {
   test("returns empty array when neither is configured", () => {
     expect(getConfiguredPrincipals()).toEqual([]);
     expect(warnings.length).toBe(2);
+  });
+
+  test("splits comma-separated calendar IDs into a list", () => {
+    process.env.GOOGLE_CALENDAR_ID_GREG = "greg@example.com";
+    process.env.GOOGLE_CALENDAR_ID_KRISTA = "k1@example.com,k2@example.com,k3@example.com";
+    expect(getConfiguredPrincipals()).toEqual([
+      { person: "greg", calendarIds: ["greg@example.com"] },
+      { person: "krista", calendarIds: ["k1@example.com", "k2@example.com", "k3@example.com"] },
+    ]);
+    expect(warnings).toEqual([]);
+  });
+
+  test("trims whitespace around comma-separated values and drops empty segments", () => {
+    process.env.GOOGLE_CALENDAR_ID_KRISTA = " k1@example.com , , k2@example.com ,";
+    const result = getConfiguredPrincipals();
+    expect(result.find((p) => p.person === "krista")?.calendarIds).toEqual([
+      "k1@example.com",
+      "k2@example.com",
+    ]);
+  });
+
+  test("skips and warns when env var is comma/whitespace-only", () => {
+    process.env.GOOGLE_CALENDAR_ID_KRISTA = " , , ,";
+    const result = getConfiguredPrincipals();
+    expect(result.find((p) => p.person === "krista")).toBeUndefined();
+    expect(warnings.some((w) => String(w[0]).includes("krista"))).toBe(true);
   });
 });
