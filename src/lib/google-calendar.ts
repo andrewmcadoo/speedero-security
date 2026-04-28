@@ -184,7 +184,25 @@ export async function fetchTransitions(
   );
   const results = await Promise.all(fetches);
 
-  const merged = results.flat();
-  merged.sort((a, b) => (a.startsAt < b.startsAt ? -1 : a.startsAt > b.startsAt ? 1 : 0));
-  return merged;
+  return mergeAndSortTransitions(results.flat());
+}
+
+/**
+ * Deduplicate transitions by (person, eventId), keeping the first occurrence,
+ * then sort ascending by startsAt. The dedup matters because a single event
+ * can appear on more than one of a principal's calendars (e.g. Krista has
+ * the same event on both her personal and work calendars) — without dedup
+ * the UI gets duplicate React keys.
+ */
+export function mergeAndSortTransitions(transitions: Transition[]): Transition[] {
+  const seen = new Set<string>();
+  const out: Transition[] = [];
+  for (const t of transitions) {
+    const key = `${t.person}:${t.eventId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(t);
+  }
+  out.sort((a, b) => (a.startsAt < b.startsAt ? -1 : a.startsAt > b.startsAt ? 1 : 0));
+  return out;
 }
