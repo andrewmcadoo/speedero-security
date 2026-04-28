@@ -6,6 +6,7 @@ import { statusBorderColor } from "./status-badge";
 import { DetailDropdown } from "./detail-dropdown";
 import { EpoAssignment } from "./epo-assignment";
 import { TeakToggle } from "./teak-toggle";
+import { TransitionsSection } from "./transitions-section";
 import { CoverageBadge } from "./coverage-badge";
 import { DETAIL_LEVEL_LABELS } from "@/lib/detail-levels";
 import { getEpoColor } from "@/lib/epo-colors";
@@ -137,6 +138,8 @@ export function ManagementCard({
             allEpos={allEpos}
             profileId={profileId}
           />
+
+          <TransitionsSection transitions={entry.transitions} />
 
           <TeakToggle
             date={entry.date}
