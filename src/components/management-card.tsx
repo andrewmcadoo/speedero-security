@@ -8,6 +8,7 @@ import { EpoAssignment } from "./epo-assignment";
 import { TeakToggle } from "./teak-toggle";
 import { TransitionsSection } from "./transitions-section";
 import { CoverageBadge } from "./coverage-badge";
+import { MissingCard } from "./missing-card";
 import { DETAIL_LEVEL_LABELS } from "@/lib/detail-levels";
 import { getEpoColor } from "@/lib/epo-colors";
 
@@ -39,12 +40,20 @@ export function ManagementCard({
   entry,
   allEpos,
   profileId,
+  todayISO,
+  tomorrowISO,
 }: {
   entry: DashboardEntry;
   allEpos: EpoInfo[];
   profileId: string;
+  todayISO: string;
+  tomorrowISO: string;
 }) {
   const [expanded, setExpanded] = useState(false);
+
+  if (entry.isMissing) {
+    return <MissingCard entry={entry} todayISO={todayISO} tomorrowISO={tomorrowISO} />;
+  }
 
   return (
     <div

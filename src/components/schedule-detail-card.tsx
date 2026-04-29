@@ -9,6 +9,7 @@ import { getEpoColor } from "@/lib/epo-colors";
 import { TravelDetailsSection } from "./travel-details-section";
 import { FlightDetailsSection } from "./flight-details-section";
 import { TransitionsSection } from "./transitions-section";
+import { MissingCard } from "./missing-card";
 
 const labelClass = "text-[10px] text-gray-500 mb-0.5";
 
@@ -28,8 +29,20 @@ function ReadOnlyField({
   );
 }
 
-export function ScheduleDetailCard({ entry }: { entry: DashboardEntry }) {
+export function ScheduleDetailCard({
+  entry,
+  todayISO,
+  tomorrowISO,
+}: {
+  entry: DashboardEntry;
+  todayISO: string;
+  tomorrowISO: string;
+}) {
   const [expanded, setExpanded] = useState(false);
+
+  if (entry.isMissing) {
+    return <MissingCard entry={entry} todayISO={todayISO} tomorrowISO={tomorrowISO} />;
+  }
 
   return (
     <div
