@@ -123,30 +123,63 @@ export function ManagementCard({
             <ReadOnlyField label="LODGING" value={entry.lodging} />
           </div>
 
-          {/* Editable: Min detail + EPO assignment */}
-          <div className="flex items-start gap-3">
-            <DetailDropdown
-              date={entry.date}
-              initialValue={entry.detailLevel}
-            />
-          </div>
+          {/* Editable: Min detail + EPO assignment — hidden for past dates */}
+          {!entry.isPast && (
+            <div className="flex items-start gap-3">
+              <DetailDropdown
+                date={entry.date}
+                initialValue={entry.detailLevel}
+              />
+            </div>
+          )}
 
-          <EpoAssignment
-            date={entry.date}
-            assignedEpos={entry.assignedEpos}
-            allEpos={allEpos}
-            profileId={profileId}
-          />
+          {!entry.isPast && (
+            <EpoAssignment
+              date={entry.date}
+              assignedEpos={entry.assignedEpos}
+              allEpos={allEpos}
+              profileId={profileId}
+            />
+          )}
 
           <TransitionsSection transitions={entry.transitions} />
 
-          <TeakToggle
-            date={entry.date}
-            initialPickup={entry.pickupLeg}
-            initialDropoff={entry.dropoffLeg}
-          />
+          {entry.isPast ? (
+            <ReadOnlyTeakSummary entry={entry} />
+          ) : (
+            <TeakToggle
+              date={entry.date}
+              initialPickup={entry.pickupLeg}
+              initialDropoff={entry.dropoffLeg}
+            />
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+function ReadOnlyTeakSummary({ entry }: { entry: DashboardEntry }) {
+  if (!entry.pickupLeg && !entry.dropoffLeg) return null;
+  return (
+    <div className="border-t border-gray-700 pt-2.5">
+      <div className="mb-1.5 text-[10px] text-gray-500">TEAK</div>
+      <div className="space-y-2 text-xs text-gray-300">
+        {entry.pickupLeg && (
+          <div>
+            <div className="text-[10px] uppercase text-green-400">Pick Up</div>
+            <div>{entry.pickupLeg.location || "—"}</div>
+            <div className="text-gray-400">{entry.pickupLeg.time}</div>
+          </div>
+        )}
+        {entry.dropoffLeg && (
+          <div>
+            <div className="text-[10px] uppercase text-rose-400">Drop Off</div>
+            <div>{entry.dropoffLeg.location || "—"}</div>
+            <div className="text-gray-400">{entry.dropoffLeg.time}</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

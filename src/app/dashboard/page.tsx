@@ -160,6 +160,7 @@ export default async function DashboardPage() {
           ...s,
           detailLevel: setting?.detailLevel ?? "single",
           assignedEpos: assignmentsByDate.get(s.date) ?? [],
+          isPast: s.date < today,
           isThisWeek: isThisWeek(s.date),
           isNextWeek: isNextWeek(s.date),
           pickupLeg: legs?.pickup,
