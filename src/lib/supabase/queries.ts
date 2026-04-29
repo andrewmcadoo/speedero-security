@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Profile } from "@/types/schedule";
+import type { CardSnapshot, DashboardEntry, Profile } from "@/types/schedule";
 
 interface ProfileRow {
   id: string;
@@ -104,4 +104,87 @@ export async function getAllEpos(
 export async function getTravelLegs(supabase: SupabaseClient) {
   const { data } = await supabase.from("travel_legs").select("*");
   return data ?? [];
+}
+
+interface CardSnapshotRow {
+  date: string;
+  payload: DashboardEntry;
+  frozen_at: string;
+  frozen_by: "cron" | "lazy" | "manual";
+}
+
+function toCardSnapshot(row: CardSnapshotRow): CardSnapshot {
+  return {
+    date: row.date,
+    payload: row.payload,
+    frozenAt: row.frozen_at,
+    frozenBy: row.frozen_by,
+  };
+}
+
+/**
+ * Returns the set of dates (within the input list) that already have a
+ * snapshot row. Used by both the cron and the lazy backfill to skip
+ * already-frozen dates.
+ */
+export async function getSnapshotDates(
+  supabase: SupabaseClient,
+  dates: string[]
+): Promise<Set<string>> {
+  if (dates.length === 0) return new Set();
+  const { data, error } = await supabase
+    .from("card_snapshots")
+    .select("date")
+    .in("date", dates);
+  if (error) {
+    console.error("getSnapshotDates failed:", error.message);
+    return new Set();
+  }
+  return new Set((data ?? []).map((r: { date: string }) => r.date));
+}
+
+/**
+ * Returns all snapshots whose date is in [start, end] inclusive, ordered
+ * by date ascending.
+ */
+export async function getSnapshotsBetween(
+  supabase: SupabaseClient,
+  start: string,
+  end: string
+): Promise<CardSnapshot[]> {
+  const { data, error } = await supabase
+    .from("card_snapshots")
+    .select("date, payload, frozen_at, frozen_by")
+    .gte("date", start)
+    .lte("date", end)
+    .order("date", { ascending: true });
+  if (error) {
+    console.error("getSnapshotsBetween failed:", error.message);
+    return [];
+  }
+  return (data ?? []).map((row) => toCardSnapshot(row as CardSnapshotRow));
+}
+
+/**
+ * Insert a snapshot. Never overwrites — if a snapshot for `date` already
+ * exists, this is a no-op (returns false). Returns true on insert.
+ */
+export async function upsertSnapshot(
+  supabase: SupabaseClient,
+  args: { date: string; payload: DashboardEntry; frozenBy: "cron" | "lazy" | "manual" }
+): Promise<boolean> {
+  const { error } = await supabase
+    .from("card_snapshots")
+    .insert({
+      date: args.date,
+      payload: args.payload,
+      frozen_by: args.frozenBy,
+    });
+  if (error) {
+    // Unique-constraint violation = "already snapshotted" = expected.
+    if (error.code === "23505") return false;
+    console.error("upsertSnapshot failed:", error.message, error.code);
+    return false;
+  }
+  return true;
 }
