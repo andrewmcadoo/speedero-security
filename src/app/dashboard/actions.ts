@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { assertNotPast, PastDateWriteError } from "@/lib/access-control";
+import { invalidateLiveSourcesCache } from "@/lib/snapshot/live-cache";
 import { revalidatePath } from "next/cache";
 import type { DetailLevel } from "@/types/schedule";
 
@@ -72,7 +73,10 @@ export async function assignEpo(
     async () => (await createClient()) as unknown as SupabaseLike,
     new Date()
   );
-  if (result.ok) revalidatePath("/dashboard");
+  if (result.ok) {
+    invalidateLiveSourcesCache();
+    revalidatePath("/dashboard");
+  }
   return result;
 }
 
@@ -105,7 +109,10 @@ export async function unassignEpo(
     async () => (await createClient()) as unknown as SupabaseLike,
     new Date()
   );
-  if (result.ok) revalidatePath("/dashboard");
+  if (result.ok) {
+    invalidateLiveSourcesCache();
+    revalidatePath("/dashboard");
+  }
   return result;
 }
 
@@ -139,7 +146,10 @@ export async function setDetailLevel(
     async () => (await createClient()) as unknown as SupabaseLike,
     new Date()
   );
-  if (result.ok) revalidatePath("/dashboard");
+  if (result.ok) {
+    invalidateLiveSourcesCache();
+    revalidatePath("/dashboard");
+  }
   return result;
 }
 
@@ -183,7 +193,10 @@ export async function createTravelLeg(
     async () => (await createClient()) as unknown as SupabaseLike,
     new Date()
   );
-  if (result.ok) revalidatePath("/dashboard");
+  if (result.ok) {
+    invalidateLiveSourcesCache();
+    revalidatePath("/dashboard");
+  }
   return result;
 }
 
@@ -231,7 +244,10 @@ export async function updateTravelLeg(
     async () => (await createClient()) as unknown as SupabaseLike,
     new Date()
   );
-  if (result.ok) revalidatePath("/dashboard");
+  if (result.ok) {
+    invalidateLiveSourcesCache();
+    revalidatePath("/dashboard");
+  }
   return result;
 }
 
@@ -260,6 +276,9 @@ export async function deleteTravelLeg(
     async () => (await createClient()) as unknown as SupabaseLike,
     new Date()
   );
-  if (result.ok) revalidatePath("/dashboard");
+  if (result.ok) {
+    invalidateLiveSourcesCache();
+    revalidatePath("/dashboard");
+  }
   return result;
 }
