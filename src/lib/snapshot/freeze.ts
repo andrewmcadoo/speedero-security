@@ -25,6 +25,30 @@ import type {
 const CRON_LOOKBACK_DAYS = 7;
 
 /**
+ * Internal: retry a fallible async op up to `attempts` times with `delayMs`
+ * between tries. Used to harden live-source fetches against transient
+ * cold-start failures (e.g., Google Sheets API).
+ */
+async function fetchWithRetry<T>(
+  fn: () => Promise<T>,
+  attempts = 2,
+  delayMs = 500
+): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts - 1) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+/**
  * Pure: dates in [today-7, today-1] that are NOT in `existing`.
  * Caller passes in the set of already-snapshotted dates.
  */
@@ -116,12 +140,14 @@ export async function fetchAllLiveSources(
   today: string
 ): Promise<AssembleSources> {
   const [schedule, dateSettingsRows, assignmentsRaw, travelLegsRaw] =
-    await Promise.all([
-      fetchSchedule(),
-      getDateSettings(supabase),
-      getAllAssignmentsWithProfiles(supabase),
-      getTravelLegs(supabase),
-    ]);
+    await fetchWithRetry(() =>
+      Promise.all([
+        fetchSchedule(),
+        getDateSettings(supabase),
+        getAllAssignmentsWithProfiles(supabase),
+        getTravelLegs(supabase),
+      ])
+    );
 
   // Transitions need a date range. Cover today-7 through whatever the
   // furthest sheet date is.
@@ -216,4 +242,25 @@ export async function fetchAllLiveSources(
     settingsMap,
   };
   return sources;
+}
+
+/**
+ * Pre-rollover capture: snapshot today's data BEFORE midnight rolls it
+ * into "yesterday." Run by the 23:55 PT timer. Idempotent — if today
+ * already has a snapshot (from a manual run or earlier retry), skip.
+ *
+ * The captured row's date column is today's date, which means after
+ * midnight when the dashboard treats it as past, the snapshot is read
+ * exactly like any cron-captured snapshot.
+ */
+export async function runPreRolloverSnapshot(
+  supabase: SupabaseClient,
+  today: string
+): Promise<RunSnapshotResult> {
+  const existing = await getSnapshotDates(supabase, [today]);
+  if (existing.has(today)) {
+    return { snapshotted: [], unrecoverable: [], alreadyFrozen: [today] };
+  }
+  const sources = await fetchAllLiveSources(supabase, today);
+  return runSnapshotForDates(supabase, [today], sources, "cron", existing);
 }

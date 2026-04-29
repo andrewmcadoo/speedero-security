@@ -100,9 +100,27 @@ sudo -u andrew mv -Tf /data/SecApp/current.new /data/SecApp/current
 sudo systemctl restart speedero-security
 ```
 
-## Nightly snapshot timer
+## Nightly snapshot timers
 
-The dashboard freezes past cards into `card_snapshots` via a systemd timer that POSTs to a loopback endpoint nightly. Install on Clipper once:
+The dashboard freezes past cards into `card_snapshots` via systemd timers that
+POST to loopback endpoints. Install on Clipper once.
+
+### Two timers, defense in depth
+
+The system uses two timers:
+
+- **23:55 PT** (`speedero-snapshot-prerollover.timer`): captures today's data
+  before midnight rollover. By the time today rolls to yesterday, the snapshot
+  is already populated, eliminating the race window where the dashboard's
+  first post-midnight load could fail to lazy-backfill (e.g., Sheets API
+  cold-start).
+- **00:30 PT** (`speedero-snapshot.timer`): catches anything the pre-rollover
+  missed (e.g., if the 23:55 fire was skipped because the server was down)
+  by re-checking the prior 7 days.
+
+Both are idempotent — if a date is already frozen, the run skips it.
+
+### Install
 
 1. Generate a token and add it to the env file:
    ```bash
@@ -113,28 +131,34 @@ The dashboard freezes past cards into `card_snapshots` via a systemd timer that 
    ```bash
    sudo systemctl restart speedero-security
    ```
-3. Install the timer + service units:
+3. Install both timer + service unit pairs:
    ```bash
    sudo cp /data/SecApp/current/scripts/deploy/speedero-snapshot.service /etc/systemd/system/
    sudo cp /data/SecApp/current/scripts/deploy/speedero-snapshot.timer /etc/systemd/system/
+   sudo cp /data/SecApp/current/scripts/deploy/speedero-snapshot-prerollover.service /etc/systemd/system/
+   sudo cp /data/SecApp/current/scripts/deploy/speedero-snapshot-prerollover.timer /etc/systemd/system/
    sudo systemctl daemon-reload
    sudo systemctl enable --now speedero-snapshot.timer
+   sudo systemctl enable --now speedero-snapshot-prerollover.timer
    ```
-4. Sanity-check:
+4. Sanity-check both timers:
    ```bash
-   systemctl list-timers speedero-snapshot.timer
-   sudo systemctl start speedero-snapshot.service   # fire once, immediately
-   sudo journalctl -u speedero-snapshot --since "5 min ago"
+   systemctl list-timers speedero-snapshot.timer speedero-snapshot-prerollover.timer
+   sudo systemctl start speedero-snapshot.service               # fire lookback once, immediately
+   sudo systemctl start speedero-snapshot-prerollover.service   # fire pre-rollover once, immediately
+   sudo journalctl -u speedero-snapshot -u speedero-snapshot-prerollover --since "5 min ago"
    ```
-   Expected log line includes `snapshotted=[...]` etc.
+   Expected log lines include `snapshotted=[...]` etc.
 
 ### Token rotation
 
-Both `speedero-security.service` and `speedero-snapshot.service` load `/data/SecApp/shared/.env.production`. To rotate:
+`speedero-security.service`, `speedero-snapshot.service`, and
+`speedero-snapshot-prerollover.service` all load
+`/data/SecApp/shared/.env.production`. To rotate:
 
 ```bash
 new_token=$(openssl rand -hex 32)
 sudo sed -i "s/^SNAPSHOT_CRON_TOKEN=.*/SNAPSHOT_CRON_TOKEN=$new_token/" /data/SecApp/shared/.env.production
 sudo systemctl restart speedero-security
-# The timer will pick up the new token on its next fire; no restart needed for the timer itself.
+# Both timers will pick up the new token on their next fire; no restart needed for the timers themselves.
 ```
