@@ -4,6 +4,13 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Snapshot cron endpoint authenticates via shared bearer token in its own
+  // route handler; skip the cookie-session middleware entirely so curl from
+  // the systemd timer (no session) is not redirected to /login.
+  if (pathname === "/api/snapshot/run") {
+    return NextResponse.next({ request });
+  }
+
   // If Supabase is not configured, let login page render but block everything else
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
