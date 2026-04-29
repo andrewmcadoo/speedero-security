@@ -185,3 +185,42 @@ export function formatTimeInTz(iso: string, tz: string): string {
   });
   return fmt.format(new Date(iso));
 }
+
+/**
+ * Add `n` days to an ISO date string (YYYY-MM-DD), returning a new ISO date
+ * string. Pure calendar arithmetic via UTC — no timezone effects.
+ */
+export function addDays(dateStr: string, n: number): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  const yyyy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(dt.getUTCDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
+ * Inclusive list of every ISO date from `start` to `end`. Returns [] when
+ * `start > end`.
+ */
+export function datesBetween(start: string, end: string): string[] {
+  if (start > end) return [];
+  const out: string[] = [];
+  let cursor = start;
+  while (cursor <= end) {
+    out.push(cursor);
+    cursor = addDays(cursor, 1);
+  }
+  return out;
+}
+
+/** Lexicographic min works on YYYY-MM-DD strings. */
+export function minDate(a: string, b: string): string {
+  return a <= b ? a : b;
+}
+
+/** Lexicographic max works on YYYY-MM-DD strings. */
+export function maxDate(a: string, b: string): string {
+  return a >= b ? a : b;
+}

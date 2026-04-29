@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { formatDateHeader, formatTimeInTz, getAnchorDates, isoDateInTz } from "./schedule-utils";
+import {
+  addDays,
+  datesBetween,
+  formatDateHeader,
+  formatTimeInTz,
+  getAnchorDates,
+  isoDateInTz,
+  maxDate,
+  minDate,
+} from "./schedule-utils";
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -139,5 +148,60 @@ describe("formatTimeInTz", () => {
 
   test("pads single-digit minutes", () => {
     expect(formatTimeInTz("2026-04-30T09:05:00-07:00", "America/Los_Angeles")).toBe("9:05 AM");
+  });
+});
+
+describe("addDays", () => {
+  test("adds positive days", () => {
+    expect(addDays("2026-04-28", 1)).toBe("2026-04-29");
+    expect(addDays("2026-04-28", 7)).toBe("2026-05-05");
+  });
+
+  test("subtracts with negative input", () => {
+    expect(addDays("2026-04-28", -1)).toBe("2026-04-27");
+    expect(addDays("2026-04-01", -1)).toBe("2026-03-31");
+  });
+
+  test("crosses month boundary forward", () => {
+    expect(addDays("2026-04-30", 1)).toBe("2026-05-01");
+  });
+
+  test("crosses year boundary backward", () => {
+    expect(addDays("2026-01-01", -1)).toBe("2025-12-31");
+  });
+
+  test("zero is identity", () => {
+    expect(addDays("2026-04-28", 0)).toBe("2026-04-28");
+  });
+});
+
+describe("datesBetween", () => {
+  test("inclusive on both ends", () => {
+    expect(datesBetween("2026-04-28", "2026-04-30")).toEqual([
+      "2026-04-28",
+      "2026-04-29",
+      "2026-04-30",
+    ]);
+  });
+
+  test("single-day range returns one element", () => {
+    expect(datesBetween("2026-04-28", "2026-04-28")).toEqual(["2026-04-28"]);
+  });
+
+  test("returns empty when start > end", () => {
+    expect(datesBetween("2026-04-30", "2026-04-28")).toEqual([]);
+  });
+});
+
+describe("minDate / maxDate", () => {
+  test("minDate returns the earlier ISO string", () => {
+    expect(minDate("2026-04-28", "2026-04-30")).toBe("2026-04-28");
+    expect(minDate("2026-04-30", "2026-04-28")).toBe("2026-04-28");
+    expect(minDate("2026-04-28", "2026-04-28")).toBe("2026-04-28");
+  });
+
+  test("maxDate returns the later ISO string", () => {
+    expect(maxDate("2026-04-28", "2026-04-30")).toBe("2026-04-30");
+    expect(maxDate("2026-04-30", "2026-04-28")).toBe("2026-04-30");
   });
 });
