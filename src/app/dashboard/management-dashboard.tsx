@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { DashboardEntry } from "@/types/schedule";
 import { SignOutButton } from "@/components/sign-out-button";
 import { ReportBugButton } from "@/components/report-bug-button";
@@ -27,7 +28,8 @@ export function ManagementDashboard({
   tomorrowISO: string;
   range: { start: string; end: string };
 }) {
-  const [filter, setFilter] = useState<FilterOption>("all");
+  const params = useSearchParams();
+  const filter: FilterOption = (params.get("filter") as FilterOption | null) ?? "all";
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
@@ -78,8 +80,6 @@ export function ManagementDashboard({
 
       <div className="mb-4">
         <DashboardFilters
-          active={filter}
-          onChange={setFilter}
           searchQuery={search}
           onSearchChange={setSearch}
           range={range}

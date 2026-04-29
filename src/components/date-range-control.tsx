@@ -37,9 +37,13 @@ export function DateRangeControl({ range }: { range: DateRange }) {
     sp.set("start", next.start);
     sp.set("end", next.end);
     sp.delete("date");
+    sp.delete("filter");
     router.push(`${pathname}?${sp.toString()}`);
     setOpen(false);
   }
+
+  const hasCustomRange = params.has("start") || params.has("end") || params.has("date");
+  const triggerActive = open || hasCustomRange;
 
   return (
     <div ref={containerRef} className="relative">
@@ -47,7 +51,7 @@ export function DateRangeControl({ range }: { range: DateRange }) {
         <button
           onClick={() => setOpen(!open)}
           className={`px-2 py-1.5 text-xs transition-colors border-r border-gray-700 ${
-            open ? "bg-blue-700 text-white" : "text-gray-400 hover:bg-gray-700"
+            triggerActive ? "bg-blue-700 text-white" : "text-gray-400 hover:bg-gray-700"
           }`}
           aria-label="Toggle date picker"
         >
