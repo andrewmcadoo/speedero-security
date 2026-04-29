@@ -12,6 +12,7 @@ import {
   getAnchorDates,
   isNextWeek,
   isThisWeek,
+  maxDate,
   minDate,
 } from "@/lib/schedule-utils";
 import {
@@ -51,7 +52,10 @@ export default async function DashboardPage({
   const isManagement = profile.role === "management";
 
   // Compute past/live split.
-  const liveStart = range.end >= today ? today : null;
+  // liveStart clamps to today (snapshots own dates < today; live owns >=).
+  // When the picked range starts in the future, the user wants only their
+  // picked window — not "today through range.end".
+  const liveStart = range.end >= today ? maxDate(range.start, today) : null;
   const liveEnd = range.end >= today ? range.end : null;
   const pastStart = range.start < today ? range.start : null;
   const pastEnd = range.start < today ? minDate(range.end, addDays(today, -1)) : null;
