@@ -57,10 +57,15 @@ export default async function DashboardPage({
   const pastEnd = range.start < today ? minDate(range.end, addDays(today, -1)) : null;
 
   // Live sources (full sheet/calendar read, used for both rendering and
-  // any lazy backfill of past gaps).
+  // any lazy backfill of past gaps). Degrades gracefully on Sheets/Calendar
+  // failure so the dashboard still renders with snapshots + missing
+  // placeholders instead of bouncing the user to error.tsx.
   const liveSourcesPromise =
     liveStart !== null
-      ? fetchAllLiveSources(supabase, today)
+      ? fetchAllLiveSources(supabase, today).catch((err) => {
+          console.error("[dashboard] fetchAllLiveSources failed:", err);
+          return null;
+        })
       : Promise.resolve(null);
 
   const snapshotsPromise =
