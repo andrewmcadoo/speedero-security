@@ -192,3 +192,21 @@ describe("fetchAllLiveSourcesCached — concurrent miss dedupe", () => {
     expect(calls).toBe(2);
   });
 });
+
+describe("fetchAllLiveSourcesCached — day rollover", () => {
+  test("when today changes, treat as a miss and refetch", async () => {
+    const day1 = makeSources("day1");
+    const day2 = makeSources("day2");
+    const { fetcher, callCount } = makeFetcher([day1, day2]);
+    let now = 1_000_000;
+
+    await _fetchAllLiveSourcesCachedForTest(STUB_SUPABASE, "2026-04-28", fetcher, () => now);
+    expect(callCount()).toBe(1);
+
+    // Same time, but today has rolled over.
+    const r = await _fetchAllLiveSourcesCachedForTest(STUB_SUPABASE, "2026-04-29", fetcher, () => now);
+    expect(r).toBe(day2);
+    expect(callCount()).toBe(2);
+    expect(_peekForTest()?.today).toBe("2026-04-29");
+  });
+});
