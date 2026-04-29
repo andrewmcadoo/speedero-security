@@ -12,3 +12,14 @@ body {
   color: var(--color-foreground);
   font-family: var(--font-sans), system-ui, sans-serif;
 }
+
+/* Card snap. Cards use snap-start; their snap target is determined by
+   scroll-padding-top on the scroll container (html), which is animated
+   via the --snap-pad CSS variable so the snap point smoothly tracks the
+   dashboard chrome bottom as it grows or shrinks (e.g. when the today
+   banner toggles inside the chrome). */
+html {
+  scroll-snap-type: y proximity;
+  scroll-padding-top: var(--snap-pad, 128px);
+  transition: scroll-padding-top 300ms ease-out;
+}
