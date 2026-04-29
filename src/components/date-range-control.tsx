@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import type { DateRange } from "@/lib/dashboard/range";
 
@@ -19,6 +19,18 @@ export function DateRangeControl({ range }: { range: DateRange }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handler(ev: MouseEvent) {
+      if (!containerRef.current) return;
+      if (containerRef.current.contains(ev.target as Node)) return;
+      setOpen(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
 
   function applyRange(next: DateRange) {
     const sp = new URLSearchParams(params.toString());
@@ -30,7 +42,7 @@ export function DateRangeControl({ range }: { range: DateRange }) {
   }
 
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative">
       <div className="inline-flex items-center overflow-hidden rounded-md bg-gray-800 ring-1 ring-gray-700">
         <button
           onClick={() => setOpen(!open)}
