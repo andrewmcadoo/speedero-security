@@ -155,10 +155,11 @@ function PopoverContents({
 
   function handleDayClick(iso: string) {
     if (pendingStart === null) {
-      // First click: set start, clear end (visualize a 1-day range until the
-      // user clicks a second day).
+      // First click: stash the pending start in local state. Do NOT call
+      // onApply yet — that would navigate (router.push) and unmount this
+      // popover, losing pendingStart and breaking the second click. The
+      // 1-day visualization comes from `displayRange` below.
       setPendingStart(iso);
-      onApply({ start: iso, end: iso });
       return;
     }
     // Second click: complete the range. Swap if user clicked earlier.
