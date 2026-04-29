@@ -103,28 +103,28 @@ export function isPast(dateStr: string): boolean {
 }
 
 /**
- * Rolling 7-day window: today through today+6.
+ * Calendar week (Sunday–Saturday) containing today.
  */
 export function isThisWeek(dateStr: string): boolean {
   const date = new Date(dateStr + "T00:00:00");
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const end = new Date(now);
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - start.getDay());
+  const end = new Date(start);
   end.setDate(end.getDate() + 6);
-  return date >= now && date <= end;
+  return date >= start && date <= end;
 }
 
 /**
- * Rolling next-week window: today+7 through today+13.
+ * Calendar week (Sunday–Saturday) following the one containing today.
  */
 export function isNextWeek(dateStr: string): boolean {
   const date = new Date(dateStr + "T00:00:00");
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const start = new Date(now);
-  start.setDate(start.getDate() + 7);
-  const end = new Date(now);
-  end.setDate(end.getDate() + 13);
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - start.getDay() + 7);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 6);
   return date >= start && date <= end;
 }
 

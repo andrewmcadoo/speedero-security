@@ -214,12 +214,19 @@ function addDaysBrowser(iso: string, n: number): string {
   return `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`;
 }
 
+function dayOfWeekBrowser(iso: string): number {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
 function PresetRow({ onPick }: { onPick: (r: DateRange) => void }) {
   const t = todayIso();
+  const sunThis = addDaysBrowser(t, -dayOfWeekBrowser(t));
+  const sunLast = addDaysBrowser(sunThis, -7);
   const presets: { label: string; range: DateRange }[] = [
     { label: "Today",        range: { start: t, end: t } },
-    { label: "This week",    range: { start: t, end: addDaysBrowser(t, 6) } },
-    { label: "Last week",    range: { start: addDaysBrowser(t, -7), end: addDaysBrowser(t, -1) } },
+    { label: "This week",    range: { start: sunThis, end: addDaysBrowser(sunThis, 6) } },
+    { label: "Last week",    range: { start: sunLast, end: addDaysBrowser(sunLast, 6) } },
     { label: "Past 30 days", range: { start: addDaysBrowser(t, -30), end: addDaysBrowser(t, -1) } },
   ];
   return (
