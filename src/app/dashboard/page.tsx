@@ -19,7 +19,8 @@ import {
   assembleDashboardEntry,
   emptyMissingEntry,
 } from "@/lib/snapshot/assemble";
-import { fetchAllLiveSources, runSnapshotForDates } from "@/lib/snapshot/freeze";
+import { runSnapshotForDates } from "@/lib/snapshot/freeze";
+import { fetchAllLiveSourcesCached } from "@/lib/snapshot/live-cache";
 import { parseRangeFromSearchParams } from "@/lib/dashboard/range";
 import { EpoDashboard } from "./epo-dashboard";
 import { ManagementDashboard } from "./management-dashboard";
@@ -70,7 +71,7 @@ export default async function DashboardPage({
   const needLiveSources =
     liveStart !== null || (pastStart !== null && pastEnd !== null);
   const liveSourcesPromise = needLiveSources
-    ? fetchAllLiveSources(supabase, today).catch((err) => {
+    ? fetchAllLiveSourcesCached(supabase, today).catch((err) => {
         console.error("[dashboard] fetchAllLiveSources failed:", err);
         return null;
       })
