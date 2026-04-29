@@ -27,7 +27,6 @@ export function ManagementDashboard({
   tomorrowISO: string;
   range: { start: string; end: string };
 }) {
-  void range;
   const [filter, setFilter] = useState<FilterOption>("all");
   const [search, setSearch] = useState("");
 
@@ -83,6 +82,7 @@ export function ManagementDashboard({
           onChange={setFilter}
           searchQuery={search}
           onSearchChange={setSearch}
+          range={range}
         />
       </div>
 
