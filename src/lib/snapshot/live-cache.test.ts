@@ -198,7 +198,7 @@ describe("fetchAllLiveSourcesCached — day rollover", () => {
     const day1 = makeSources("day1");
     const day2 = makeSources("day2");
     const { fetcher, callCount } = makeFetcher([day1, day2]);
-    let now = 1_000_000;
+    const now = 1_000_000;
 
     await _fetchAllLiveSourcesCachedForTest(STUB_SUPABASE, "2026-04-28", fetcher, () => now);
     expect(callCount()).toBe(1);
