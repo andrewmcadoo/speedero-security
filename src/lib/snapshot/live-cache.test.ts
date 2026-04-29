@@ -128,3 +128,20 @@ describe("fetchAllLiveSourcesCached — STALE hit (SWR)", () => {
     expect(callCount()).toBe(2);
   });
 });
+
+describe("fetchAllLiveSourcesCached — sync miss after STALE_MS", () => {
+  test("call after STALE_MS sync-fetches and replaces the cache", async () => {
+    const sourcesA = makeSources("A");
+    const sourcesB = makeSources("B");
+    const { fetcher, callCount } = makeFetcher([sourcesA, sourcesB]);
+    let now = 1_000_000;
+
+    await _fetchAllLiveSourcesCachedForTest(STUB_SUPABASE, "2026-04-28", fetcher, () => now);
+    expect(callCount()).toBe(1);
+
+    now += STALE_MS + 1;
+    const r = await _fetchAllLiveSourcesCachedForTest(STUB_SUPABASE, "2026-04-28", fetcher, () => now);
+    expect(r).toBe(sourcesB); // got the FRESH value, not the old A.
+    expect(callCount()).toBe(2);
+  });
+});
