@@ -113,8 +113,6 @@ export function ManagementDashboard({
                 entry={entry}
                 allEpos={epos}
                 profileId={profileId}
-                todayISO={todayISO}
-                tomorrowISO={tomorrowISO}
               />
             </div>
           ))}
