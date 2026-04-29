@@ -40,19 +40,15 @@ export function ManagementCard({
   entry,
   allEpos,
   profileId,
-  todayISO,
-  tomorrowISO,
 }: {
   entry: DashboardEntry;
   allEpos: EpoInfo[];
   profileId: string;
-  todayISO: string;
-  tomorrowISO: string;
 }) {
   const [expanded, setExpanded] = useState(false);
 
   if (entry.isMissing) {
-    return <MissingCard entry={entry} todayISO={todayISO} tomorrowISO={tomorrowISO} />;
+    return <MissingCard />;
   }
 
   return (
