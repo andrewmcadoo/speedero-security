@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { assertNotPast, PastDateWriteError } from "@/lib/access-control";
 import { revalidatePath } from "next/cache";
+import type { DetailLevel } from "@/types/schedule";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -101,6 +102,40 @@ export async function unassignEpo(
   const result = await _unassignEpoForTest(
     date,
     epoId,
+    async () => (await createClient()) as unknown as SupabaseLike,
+    new Date()
+  );
+  if (result.ok) revalidatePath("/dashboard");
+  return result;
+}
+
+// ---- setDetailLevel ----
+
+export async function _setDetailLevelForTest(
+  date: string,
+  level: DetailLevel,
+  factory: SupabaseFactory,
+  now: Date
+): Promise<ActionResult> {
+  return withGuard(date, now, async (supabase, userId) => {
+    const { error } = await supabase.from("date_settings").upsert!({
+      date,
+      detail_level: level,
+      updated_by: userId,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "date" });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }, factory);
+}
+
+export async function setDetailLevel(
+  date: string,
+  level: DetailLevel
+): Promise<ActionResult> {
+  const result = await _setDetailLevelForTest(
+    date,
+    level,
     async () => (await createClient()) as unknown as SupabaseLike,
     new Date()
   );
