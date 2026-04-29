@@ -131,6 +131,9 @@ function PopoverContents({
     const [y, m] = range.start.split("-");
     return `${y}-${m}-01`;
   });
+  // pendingStart=null means "next click sets start"; pendingStart!=null
+  // means "next click sets end" (Kayak-style two-click range).
+  const [pendingStart, setPendingStart] = useState<string | null>(null);
 
   function shiftMonth(delta: number) {
     const [y, m] = monthStart.split("-").map(Number);
@@ -138,8 +141,27 @@ function PopoverContents({
     setMonthStart(`${next.getUTCFullYear()}-${pad(next.getUTCMonth() + 1)}-01`);
   }
 
+  function handleDayClick(iso: string) {
+    if (pendingStart === null) {
+      // First click: set start, clear end (visualize a 1-day range until the
+      // user clicks a second day).
+      setPendingStart(iso);
+      onApply({ start: iso, end: iso });
+      return;
+    }
+    // Second click: complete the range. Swap if user clicked earlier.
+    const start = pendingStart < iso ? pendingStart : iso;
+    const end = pendingStart < iso ? iso : pendingStart;
+    setPendingStart(null);
+    onApply({ start, end });
+    onClose();
+  }
+
   const [year, mm] = monthStart.split("-");
   const monthLabel = `${MONTH_NAMES[Number(mm) - 1]} ${year}`;
+  const displayRange = pendingStart !== null
+    ? { start: pendingStart, end: pendingStart }
+    : range;
 
   return (
     <div className="absolute right-0 top-full z-10 mt-1 w-72 rounded-md bg-gray-900 p-3 shadow-lg ring-1 ring-gray-700">
@@ -150,15 +172,50 @@ function PopoverContents({
       </div>
       <MonthGrid
         monthStart={monthStart}
-        range={range}
-        onDayClick={(iso) => {
-          // Click pattern handled in Task 19. For now: single-day select.
-          onApply({ start: iso, end: iso });
-        }}
+        range={displayRange}
+        onDayClick={handleDayClick}
       />
-      <div className="mt-3 flex gap-1">
-        <button onClick={onClose} className="flex-1 rounded bg-gray-800 py-1 text-xs text-gray-400 hover:bg-gray-700">Close</button>
+      <PresetRow onPick={(r) => { setPendingStart(null); onApply(r); onClose(); }} />
+      <div className="mt-1 text-center text-[10px] text-gray-600">
+        {pendingStart === null ? "Click to set start" : "Click to set end"}
       </div>
+    </div>
+  );
+}
+
+function todayIso(): string {
+  // The popover runs in the browser; TZ-correct enough for human selection
+  // (the server is the authority on `today` for filtering).
+  const now = new Date();
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+function addDaysBrowser(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return `${dt.getUTCFullYear()}-${pad(dt.getUTCMonth() + 1)}-${pad(dt.getUTCDate())}`;
+}
+
+function PresetRow({ onPick }: { onPick: (r: DateRange) => void }) {
+  const t = todayIso();
+  const presets: { label: string; range: DateRange }[] = [
+    { label: "Today",        range: { start: t, end: t } },
+    { label: "This week",    range: { start: t, end: addDaysBrowser(t, 6) } },
+    { label: "Last week",    range: { start: addDaysBrowser(t, -7), end: addDaysBrowser(t, -1) } },
+    { label: "Past 30 days", range: { start: addDaysBrowser(t, -30), end: addDaysBrowser(t, -1) } },
+  ];
+  return (
+    <div className="mt-3 grid grid-cols-2 gap-1">
+      {presets.map((p) => (
+        <button
+          key={p.label}
+          onClick={() => onPick(p.range)}
+          className="rounded bg-gray-800 px-2 py-1 text-xs text-gray-300 hover:bg-gray-700"
+        >
+          {p.label}
+        </button>
+      ))}
     </div>
   );
 }
