@@ -56,17 +56,21 @@ export default async function DashboardPage({
   const pastStart = range.start < today ? range.start : null;
   const pastEnd = range.start < today ? minDate(range.end, addDays(today, -1)) : null;
 
-  // Live sources (full sheet/calendar read, used for both rendering and
-  // any lazy backfill of past gaps). Degrades gracefully on Sheets/Calendar
-  // failure so the dashboard still renders with snapshots + missing
-  // placeholders instead of bouncing the user to error.tsx.
-  const liveSourcesPromise =
-    liveStart !== null
-      ? fetchAllLiveSources(supabase, today).catch((err) => {
-          console.error("[dashboard] fetchAllLiveSources failed:", err);
-          return null;
-        })
-      : Promise.resolve(null);
+  // Live sources (full sheet/calendar read). Needed for two reasons:
+  //   1. Rendering today/future cards (when liveStart !== null).
+  //   2. Lazy-backfilling missing past snapshots — without live data, a
+  //      past-only range can't backfill and renders dates outside the
+  //      cron's lookback window as "? no snapshot" placeholders.
+  // Degrades gracefully on Sheets/Calendar failure so the dashboard still
+  // renders with whatever snapshots exist instead of bouncing to error.tsx.
+  const needLiveSources =
+    liveStart !== null || (pastStart !== null && pastEnd !== null);
+  const liveSourcesPromise = needLiveSources
+    ? fetchAllLiveSources(supabase, today).catch((err) => {
+        console.error("[dashboard] fetchAllLiveSources failed:", err);
+        return null;
+      })
+    : Promise.resolve(null);
 
   const snapshotsPromise =
     pastStart !== null && pastEnd !== null
