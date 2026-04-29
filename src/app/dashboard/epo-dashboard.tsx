@@ -24,13 +24,16 @@ export function EpoDashboard({
   userName,
   todayISO,
   tomorrowISO,
+  range,
 }: {
   entries: DashboardEntry[];
   assignedDates: string[];
   userName: string;
   todayISO: string;
   tomorrowISO: string;
+  range: { start: string; end: string };
 }) {
+  void range;
   const firstName = (userName ?? "").trim().split(/\s+/)[0] || "";
   const [filter, setFilter] = useState<FilterOption>("all");
   const [search, setSearch] = useState("");

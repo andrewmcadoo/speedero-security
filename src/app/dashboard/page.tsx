@@ -1,87 +1,34 @@
 import { createClient } from "@/lib/supabase/server";
-import { getProfile, getAssignmentsForUser, getDateSettings, getAllAssignmentsWithProfiles, getAllEpos, getTravelLegs } from "@/lib/supabase/queries";
-import { fetchSchedule } from "@/lib/google-sheets";
-import { fetchTransitions } from "@/lib/google-calendar";
-import type { ScheduleEntry, DashboardEntry, DetailLevel, TravelLeg, Transition } from "@/types/schedule";
-import { isThisWeek, isNextWeek, getAnchorDates, isoDateInTz } from "@/lib/schedule-utils";
-import { assembleDashboardEntry } from "@/lib/snapshot/assemble";
+import {
+  getProfile,
+  getAssignmentsForUser,
+  getAllEpos,
+  getSnapshotsBetween,
+} from "@/lib/supabase/queries";
+import type { DashboardEntry } from "@/types/schedule";
+import {
+  addDays,
+  datesBetween,
+  getAnchorDates,
+  isNextWeek,
+  isThisWeek,
+  minDate,
+} from "@/lib/schedule-utils";
+import {
+  assembleDashboardEntry,
+  emptyMissingEntry,
+} from "@/lib/snapshot/assemble";
+import { fetchAllLiveSources, runSnapshotForDates } from "@/lib/snapshot/freeze";
+import { parseRangeFromSearchParams } from "@/lib/dashboard/range";
 import { EpoDashboard } from "./epo-dashboard";
 import { ManagementDashboard } from "./management-dashboard";
 import { redirect } from "next/navigation";
 
-interface DateLegs {
-  pickup?: TravelLeg;
-  dropoff?: TravelLeg;
-}
-
-function toTravelLegsMap(
-  rows: { date: string; action: string; location: string; time: string; companion: string; companion_pre_position_flight: string; teak_flight: string; companion_return_flight: string }[]
-): Map<string, DateLegs> {
-  const map = new Map<string, DateLegs>();
-  for (const tl of rows) {
-    const leg: TravelLeg = {
-      date: tl.date,
-      action: tl.action as TravelLeg["action"],
-      location: tl.location,
-      time: tl.time,
-      companion: tl.companion,
-      companionPrePositionFlight: tl.companion_pre_position_flight,
-      teakFlight: tl.teak_flight,
-      companionReturnFlight: tl.companion_return_flight,
-    };
-    const existing = map.get(tl.date) ?? {};
-    if (leg.action === "Pick up") existing.pickup = leg;
-    else if (leg.action === "Drop off") existing.dropoff = leg;
-    map.set(tl.date, existing);
-  }
-  return map;
-}
-
-async function fetchScheduleData(): Promise<ScheduleEntry[]> {
-  try {
-    return await fetchSchedule();
-  } catch (error) {
-    console.error("fetchSchedule failed:", error);
-    return [];
-  }
-}
-
-async function fetchTransitionsData(
-  range: { startDate: string; endDate: string }
-): Promise<Transition[]> {
-  try {
-    return await fetchTransitions(range);
-  } catch (error) {
-    console.error("fetchTransitions failed:", error);
-    return [];
-  }
-}
-
-function buildTransitionsByDate(
-  transitions: Transition[],
-  knownDates: Set<string>
-): Map<string, Transition[]> {
-  const map = new Map<string, Transition[]>();
-  let orphanCount = 0;
-  for (const t of transitions) {
-    const date = isoDateInTz(t.startsAt, t.tz);
-    if (!knownDates.has(date)) {
-      orphanCount++;
-      continue;
-    }
-    const list = map.get(date) ?? [];
-    list.push(t);
-    map.set(date, list);
-  }
-  if (orphanCount > 0) {
-    console.warn(
-      `[transitions] dropped ${orphanCount} transition(s) on dates with no schedule row`
-    );
-  }
-  return map;
-}
-
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const supabase = await createClient();
 
   let profile;
@@ -96,80 +43,115 @@ export default async function DashboardPage() {
   }
 
   const { today, tomorrow } = getAnchorDates();
+  const params = await searchParams;
+  const range = parseRangeFromSearchParams(params, {
+    today,
+    role: profile.role as "epo" | "management",
+  });
   const isManagement = profile.role === "management";
-  const [schedule, dateSettings] = await Promise.all([
-    fetchScheduleData(),
-    getDateSettings(supabase),
+
+  // Compute past/live split.
+  const liveStart = range.end >= today ? today : null;
+  const liveEnd = range.end >= today ? range.end : null;
+  const pastStart = range.start < today ? range.start : null;
+  const pastEnd = range.start < today ? minDate(range.end, addDays(today, -1)) : null;
+
+  // Live sources (full sheet/calendar read, used for both rendering and
+  // any lazy backfill of past gaps).
+  const liveSourcesPromise =
+    liveStart !== null
+      ? fetchAllLiveSources(supabase, today)
+      : Promise.resolve(null);
+
+  const snapshotsPromise =
+    pastStart !== null && pastEnd !== null
+      ? getSnapshotsBetween(supabase, pastStart, pastEnd)
+      : Promise.resolve([]);
+
+  const [liveSources, snapshotsRaw] = await Promise.all([
+    liveSourcesPromise,
+    snapshotsPromise,
   ]);
 
-  // Kick off the transitions fetch in parallel with the branch-specific
-  // Supabase fetches further down. Date range: today through the latest
-  // sheet date. If the schedule fetch failed/returned empty, skip the
-  // calendar call entirely.
-  const transitionsPromise: Promise<Transition[]> =
-    schedule.length === 0
-      ? Promise.resolve([])
-      : fetchTransitionsData({
-          startDate: today,
-          endDate: schedule.reduce((max, s) => (s.date > max ? s.date : max), today),
-        });
-
-  // Build date settings map
-  const settingsMap = new Map(
-    dateSettings.map((ds: { date: string; detail_level: string }) => [
-      ds.date,
-      { detailLevel: ds.detail_level as DetailLevel },
-    ])
-  );
-
-  if (isManagement) {
-    const [assignmentsRaw, epos, travelLegsRaw] = await Promise.all([
-      getAllAssignmentsWithProfiles(supabase),
-      getAllEpos(supabase, profile.id),
-      getTravelLegs(supabase),
-    ]);
-
-    // Group assignments by date
-    const assignmentsByDate = new Map<
-      string,
-      { id: string; fullName: string; email: string }[]
-    >();
-    for (const a of assignmentsRaw) {
-      const epoInfo = a.profiles as { id: string; full_name: string; email: string } | null;
-      if (!epoInfo) continue;
-      const existing = assignmentsByDate.get(a.date) ?? [];
-      existing.push({
-        id: epoInfo.id,
-        fullName: epoInfo.full_name,
-        email: epoInfo.email,
-      });
-      assignmentsByDate.set(a.date, existing);
+  // Lazy backfill any past gaps in the requested range.
+  let backfilled: typeof snapshotsRaw = [];
+  if (pastStart !== null && pastEnd !== null && liveSources) {
+    const have = new Set(snapshotsRaw.map((s) => s.date));
+    const requestedPast = datesBetween(pastStart, pastEnd);
+    const missing = requestedPast.filter((d) => !have.has(d));
+    if (missing.length > 0) {
+      const result = await runSnapshotForDates(
+        supabase,
+        missing,
+        liveSources,
+        "lazy"
+      );
+      if (result.snapshotted.length > 0) {
+        const fresh = await getSnapshotsBetween(supabase, pastStart, pastEnd);
+        backfilled = fresh.filter((s) => !have.has(s.date));
+      }
     }
+  }
+  const allSnapshots = [...snapshotsRaw, ...backfilled];
 
-    const transitions = await transitionsPromise;
-    const knownDates = new Set(schedule.map((s) => s.date));
-    const transitionsByDate = buildTransitionsByDate(transitions, knownDates);
+  // EPO-specific assigned-dates info, only needed for the EPO branch's
+  // travel-leg visibility filter.
+  const myAssignments = !isManagement
+    ? await getAssignmentsForUser(supabase, profile.id)
+    : [];
+  const assignedDates = myAssignments.map((a: { date: string }) => a.date);
+  const assignedDateSet = new Set(assignedDates);
 
-    const travelLegsByDate = toTravelLegsMap(travelLegsRaw);
+  // Build past entries from snapshots — payloads are already complete
+  // DashboardEntry objects, just stamp isPast/isThisWeek/isNextWeek.
+  const pastEntries: DashboardEntry[] = allSnapshots.map((s) => ({
+    ...s.payload,
+    isPast: true,
+    isFromSnapshot: true,
+    isThisWeek: isThisWeek(s.date),
+    isNextWeek: isNextWeek(s.date),
+  }));
 
-    const entries: DashboardEntry[] = schedule
-      .filter((s) => s.date >= today)
+  // Build live entries from sources for [today..range.end].
+  const liveEntries: DashboardEntry[] = (() => {
+    if (liveStart === null || liveEnd === null || !liveSources) return [];
+    return liveSources.schedule
+      .filter((s) => s.date >= liveStart && s.date <= liveEnd)
       .map((s) => {
-        const base = assembleDashboardEntry(s.date, {
-          schedule,
-          transitionsByDate,
-          assignmentsByDate,
-          travelLegsByDate,
-          settingsMap,
-        })!; // safe: we just iterated over schedule
+        const base = assembleDashboardEntry(s.date, liveSources)!;
+        const epoLegs =
+          !isManagement && !assignedDateSet.has(s.date)
+            ? { pickupLeg: undefined, dropoffLeg: undefined }
+            : {};
         return {
           ...base,
-          isPast: s.date < today,
+          ...epoLegs,
+          isPast: false,
           isThisWeek: isThisWeek(s.date),
           isNextWeek: isNextWeek(s.date),
         };
       });
+  })();
 
+  // Missing past placeholders — past dates the user explicitly asked for
+  // that have neither a snapshot nor a live row.
+  const haveDates = new Set([
+    ...pastEntries.map((e) => e.date),
+    ...liveEntries.map((e) => e.date),
+  ]);
+  const missingPast: DashboardEntry[] =
+    pastStart !== null && pastEnd !== null
+      ? datesBetween(pastStart, pastEnd)
+          .filter((d) => !haveDates.has(d))
+          .map((d) => emptyMissingEntry(d))
+      : [];
+
+  const entries = [...pastEntries, ...missingPast, ...liveEntries].sort((a, b) =>
+    a.date.localeCompare(b.date)
+  );
+
+  if (isManagement) {
+    const epos = await getAllEpos(supabase, profile.id);
     return (
       <ManagementDashboard
         entries={entries}
@@ -181,61 +163,10 @@ export default async function DashboardPage() {
         profileId={profile.id}
         todayISO={today}
         tomorrowISO={tomorrow}
+        range={range}
       />
     );
   }
-
-  // EPO view: full schedule with assigned dates info + travel details
-  const [assignmentsRaw, myAssignments, travelLegsRaw] = await Promise.all([
-    getAllAssignmentsWithProfiles(supabase),
-    getAssignmentsForUser(supabase, profile.id),
-    getTravelLegs(supabase),
-  ]);
-
-  const transitions = await transitionsPromise;
-  const knownDates = new Set(schedule.map((s) => s.date));
-  const transitionsByDate = buildTransitionsByDate(transitions, knownDates);
-
-  const travelLegsByDate = toTravelLegsMap(travelLegsRaw);
-
-  const assignedDates = myAssignments.map((a: { date: string }) => a.date);
-  const assignedDateSet = new Set(assignedDates);
-
-  // Group all assignments by date (same logic as management)
-  const assignmentsByDate = new Map<
-    string,
-    { id: string; fullName: string; email: string }[]
-  >();
-  for (const a of assignmentsRaw) {
-    const epoInfo = a.profiles as { id: string; full_name: string; email: string } | null;
-    if (!epoInfo) continue;
-    const existing = assignmentsByDate.get(a.date) ?? [];
-    existing.push({
-      id: epoInfo.id,
-      fullName: epoInfo.full_name,
-      email: epoInfo.email,
-    });
-    assignmentsByDate.set(a.date, existing);
-  }
-
-  const entries: DashboardEntry[] = schedule.map((s) => {
-    const base = assembleDashboardEntry(s.date, {
-      schedule,
-      transitionsByDate,
-      assignmentsByDate,
-      travelLegsByDate,
-      settingsMap,
-    })!;
-    const isAssigned = assignedDateSet.has(s.date);
-    return {
-      ...base,
-      pickupLeg: isAssigned ? base.pickupLeg : undefined,
-      dropoffLeg: isAssigned ? base.dropoffLeg : undefined,
-      isPast: s.date < today,
-      isThisWeek: isThisWeek(s.date),
-      isNextWeek: isNextWeek(s.date),
-    };
-  });
 
   return (
     <EpoDashboard
@@ -244,6 +175,7 @@ export default async function DashboardPage() {
       userName={profile.fullName}
       todayISO={today}
       tomorrowISO={tomorrow}
+      range={range}
     />
   );
 }

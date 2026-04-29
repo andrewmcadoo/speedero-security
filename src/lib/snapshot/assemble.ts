@@ -47,3 +47,32 @@ export function assembleDashboardEntry(
     transitions: sources.transitionsByDate.get(date) ?? [],
   };
 }
+
+/**
+ * Placeholder entry for a past date the user picked but for which we have
+ * no snapshot and no surviving live row. Renders as a "?" card.
+ */
+export function emptyMissingEntry(date: string): DashboardEntry {
+  return {
+    date,
+    dayOfWeek: "",
+    confirmationStatus: "unconfirmed",
+    teakNight: false,
+    activity: "",
+    location: "",
+    coPilot: "",
+    flightInfo: "",
+    departure: { airport: "", fbo: "", time: "" },
+    arrival: { airport: "", fbo: "", time: "" },
+    internationalPax: "",
+    groundTransport: "",
+    lodging: "",
+    comments: "",
+    rowId: `missing-${date}`,
+    detailLevel: "single",
+    assignedEpos: [],
+    transitions: [],
+    isPast: true,
+    isMissing: true,
+  };
+}
