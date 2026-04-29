@@ -1,8 +1,3 @@
-import type { ScheduleEntry } from "@/types/schedule";
-
-const PAST_DAYS = 7;
-const FUTURE_DAYS = 30;
-
 const DEFAULT_TIMEZONE = "America/Los_Angeles";
 
 /**
@@ -40,27 +35,6 @@ export function getAnchorDates(now: Date = new Date()): {
     String(tomorrowDate.getUTCDate()).padStart(2, "0"),
   ].join("-");
   return { today, tomorrow, timezone };
-}
-
-/**
- * Filter schedule entries to a rolling window around today.
- */
-export function filterRollingWindow(
-  entries: ScheduleEntry[]
-): ScheduleEntry[] {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-
-  const pastCutoff = new Date(now);
-  pastCutoff.setDate(pastCutoff.getDate() - PAST_DAYS);
-
-  const futureCutoff = new Date(now);
-  futureCutoff.setDate(futureCutoff.getDate() + FUTURE_DAYS);
-
-  return entries.filter((entry) => {
-    const entryDate = new Date(entry.date + "T00:00:00");
-    return entryDate >= pastCutoff && entryDate <= futureCutoff;
-  });
 }
 
 /**
