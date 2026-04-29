@@ -128,7 +128,6 @@ export function ManagementCard({
             <DetailDropdown
               date={entry.date}
               initialValue={entry.detailLevel}
-              profileId={profileId}
             />
           </div>
 

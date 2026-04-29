@@ -1,6 +1,6 @@
 "use client";
 
-import { createClient } from "@/lib/supabase/client";
+import { setDetailLevel } from "@/app/dashboard/actions";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { DetailLevel } from "@/types/schedule";
@@ -11,11 +11,9 @@ const LEVELS: DetailLevel[] = ["none", "single", "dual_day", "dual"];
 export function DetailDropdown({
   date,
   initialValue,
-  profileId,
 }: {
   date: string;
   initialValue: DetailLevel;
-  profileId: string;
 }) {
   const [value, setValue] = useState<DetailLevel>(initialValue);
   const router = useRouter();
@@ -26,21 +24,11 @@ export function DetailDropdown({
   }, [initialValue]);
 
   const update = async (newValue: DetailLevel) => {
-    // Optimistic update
     setValue(newValue);
-    const supabase = createClient();
-    const { error } = await supabase.from("date_settings").upsert(
-      {
-        date,
-        detail_level: newValue,
-        updated_by: profileId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "date" }
-    );
-    if (error) {
-      console.error("Detail level save failed:", error);
-      setValue(value); // Revert on failure
+    const result = await setDetailLevel(date, newValue);
+    if (!result.ok) {
+      console.error("Detail level save failed:", result.error);
+      setValue(value);
     } else {
       router.refresh();
     }
