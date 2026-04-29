@@ -43,6 +43,10 @@ export async function _fetchAllLiveSourcesCachedForTest(
     if (age < FRESH_MS) {
       return cache.value;
     }
+    if (age < STALE_MS) {
+      kickOffBackgroundRefresh(supabase, today, fetcher, now);
+      return cache.value;
+    }
   }
   const value = await fetcher(supabase, today);
   cache = {
@@ -53,6 +57,33 @@ export async function _fetchAllLiveSourcesCachedForTest(
     pendingFetch: null,
   };
   return value;
+}
+
+function kickOffBackgroundRefresh(
+  supabase: SupabaseClient,
+  today: string,
+  fetcher: Fetcher,
+  now: () => number
+): void {
+  if (!cache || cache.refreshing) return;
+  cache.refreshing = true;
+  fetcher(supabase, today)
+    .then((value) => {
+      // Guard against day-rollover during the in-flight refresh: if the
+      // cached `today` no longer matches what we fetched for, drop the result.
+      if (!cache || cache.today !== today) return;
+      cache = {
+        today,
+        fetchedAt: now(),
+        refreshing: false,
+        value,
+        pendingFetch: null,
+      };
+    })
+    .catch((err) => {
+      console.error("[live-cache] background refresh failed:", err);
+      if (cache) cache.refreshing = false;
+    });
 }
 
 export function fetchAllLiveSourcesCached(
