@@ -49,19 +49,116 @@ export function DateRangeControl({ range }: { range: DateRange }) {
         </button>
       </div>
       {open && (
-        <div className="absolute right-0 top-full z-10 mt-1 w-72 rounded-md bg-gray-900 p-3 shadow-lg ring-1 ring-gray-700">
-          <div className="text-xs text-gray-400">
-            Calendar grid lands in Task 18.
-          </div>
-          {/* TEMP — remove in Task 18: */}
-          <button
-            onClick={() => applyRange({ start: range.start, end: range.end })}
-            className="mt-2 rounded bg-blue-700 px-2 py-1 text-xs text-white"
-          >
-            Close
-          </button>
-        </div>
+        <PopoverContents
+          range={range}
+          onApply={applyRange}
+          onClose={() => setOpen(false)}
+        />
       )}
+    </div>
+  );
+}
+
+const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const WEEKDAYS = ["S","M","T","W","T","F","S"];
+
+interface MonthGridProps {
+  /** First-of-month for the displayed page, ISO YYYY-MM-01. */
+  monthStart: string;
+  range: DateRange;
+  onDayClick: (iso: string) => void;
+}
+
+function pad(n: number): string { return String(n).padStart(2, "0"); }
+
+function MonthGrid({ monthStart, range, onDayClick }: MonthGridProps) {
+  const [yearStr, monthStr] = monthStart.split("-");
+  const year = Number(yearStr);
+  const month = Number(monthStr); // 1-based
+  const firstWeekdayUtc = new Date(Date.UTC(year, month - 1, 1)).getUTCDay(); // 0..6
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+
+  // Build a flat array of cells: leading blanks + days.
+  const cells: ({ iso: string; day: number } | null)[] = [];
+  for (let i = 0; i < firstWeekdayUtc; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells.push({ iso: `${year}-${pad(month)}-${pad(d)}`, day: d });
+  }
+
+  function classFor(iso: string): string {
+    const isStart = iso === range.start;
+    const isEnd = iso === range.end;
+    const inRange = iso > range.start && iso < range.end;
+    if (isStart && isEnd) return "bg-blue-600 text-white rounded";
+    if (isStart) return "bg-blue-600 text-white rounded-l";
+    if (isEnd) return "bg-blue-600 text-white rounded-r";
+    if (inRange) return "bg-blue-900 text-blue-100";
+    return "text-gray-400 hover:bg-gray-800 rounded";
+  }
+
+  return (
+    <div>
+      <div className="grid grid-cols-7 gap-0.5 text-center text-[10px] text-gray-500 mb-1">
+        {WEEKDAYS.map((w, i) => (<div key={i}>{w}</div>))}
+      </div>
+      <div className="grid grid-cols-7 gap-0.5 text-center text-xs">
+        {cells.map((c, i) => c === null ? (
+          <div key={`blank-${i}`} />
+        ) : (
+          <button
+            key={c.iso}
+            onClick={() => onDayClick(c.iso)}
+            className={`py-1 ${classFor(c.iso)}`}
+          >
+            {c.day}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PopoverContents({
+  range,
+  onApply,
+  onClose,
+}: {
+  range: DateRange;
+  onApply: (next: DateRange) => void;
+  onClose: () => void;
+}) {
+  const [monthStart, setMonthStart] = useState(() => {
+    const [y, m] = range.start.split("-");
+    return `${y}-${m}-01`;
+  });
+
+  function shiftMonth(delta: number) {
+    const [y, m] = monthStart.split("-").map(Number);
+    const next = new Date(Date.UTC(y, m - 1 + delta, 1));
+    setMonthStart(`${next.getUTCFullYear()}-${pad(next.getUTCMonth() + 1)}-01`);
+  }
+
+  const [year, mm] = monthStart.split("-");
+  const monthLabel = `${MONTH_NAMES[Number(mm) - 1]} ${year}`;
+
+  return (
+    <div className="absolute right-0 top-full z-10 mt-1 w-72 rounded-md bg-gray-900 p-3 shadow-lg ring-1 ring-gray-700">
+      <div className="mb-2 flex items-center justify-between">
+        <button onClick={() => shiftMonth(-1)} className="px-2 text-gray-400 hover:text-gray-100">‹</button>
+        <div className="text-xs font-semibold text-gray-200">{monthLabel}</div>
+        <button onClick={() => shiftMonth(1)} className="px-2 text-gray-400 hover:text-gray-100">›</button>
+      </div>
+      <MonthGrid
+        monthStart={monthStart}
+        range={range}
+        onDayClick={(iso) => {
+          // Click pattern handled in Task 19. For now: single-day select.
+          onApply({ start: iso, end: iso });
+        }}
+      />
+      <div className="mt-3 flex gap-1">
+        <button onClick={onClose} className="flex-1 rounded bg-gray-800 py-1 text-xs text-gray-400 hover:bg-gray-700">Close</button>
+      </div>
     </div>
   );
 }
