@@ -210,3 +210,22 @@ describe("fetchAllLiveSourcesCached — day rollover", () => {
     expect(_peekForTest()?.today).toBe("2026-04-29");
   });
 });
+
+describe("invalidateLiveSourcesCache", () => {
+  test("clears the cache so the next call sync-fetches", async () => {
+    const sourcesA = makeSources("A");
+    const sourcesB = makeSources("B");
+    const { fetcher, callCount } = makeFetcher([sourcesA, sourcesB]);
+    const now = () => 1_000_000;
+
+    await _fetchAllLiveSourcesCachedForTest(STUB_SUPABASE, "2026-04-28", fetcher, now);
+    expect(callCount()).toBe(1);
+
+    invalidateLiveSourcesCache();
+    expect(_peekForTest()).toBeNull();
+
+    const r = await _fetchAllLiveSourcesCachedForTest(STUB_SUPABASE, "2026-04-28", fetcher, now);
+    expect(r).toBe(sourcesB);
+    expect(callCount()).toBe(2);
+  });
+});
