@@ -60,6 +60,8 @@ export interface DashboardEntry extends ScheduleEntry {
   pickupLeg?: TravelLeg;
   dropoffLeg?: TravelLeg;
   transitions: Transition[];
+  isFromSnapshot?: boolean;
+  isMissing?: boolean;
 }
 
 export interface TravelLeg {
@@ -81,4 +83,11 @@ export interface Transition {
   startsAt: string;  // ISO 8601 with offset, e.g. "2026-04-30T09:30:00-07:00"
   tz: string;        // event's IANA timezone, e.g. "America/Los_Angeles"
   eventId: string;   // Google Calendar event id (instance id for recurring) — React key
+}
+
+export interface CardSnapshot {
+  date: string;
+  payload: DashboardEntry;
+  frozenAt: string;
+  frozenBy: "cron" | "lazy" | "manual";
 }
