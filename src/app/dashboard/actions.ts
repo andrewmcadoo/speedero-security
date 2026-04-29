@@ -74,3 +74,36 @@ export async function assignEpo(
   if (result.ok) revalidatePath("/dashboard");
   return result;
 }
+
+// ---- unassignEpo ----
+
+export async function _unassignEpoForTest(
+  date: string,
+  epoId: string,
+  factory: SupabaseFactory,
+  now: Date
+): Promise<ActionResult> {
+  return withGuard(date, now, async (supabase) => {
+    // The supabase delete chain returns a builder; the type stub is loose
+    // because we only verify shape in tests.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const builder: any = supabase.from("assignments").delete!();
+    const { error } = await builder.eq("date", date).eq("epo_id", epoId);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }, factory);
+}
+
+export async function unassignEpo(
+  date: string,
+  epoId: string
+): Promise<ActionResult> {
+  const result = await _unassignEpoForTest(
+    date,
+    epoId,
+    async () => (await createClient()) as unknown as SupabaseLike,
+    new Date()
+  );
+  if (result.ok) revalidatePath("/dashboard");
+  return result;
+}

@@ -1,7 +1,6 @@
 "use client";
 
-import { createClient } from "@/lib/supabase/client";
-import { assignEpo } from "@/app/dashboard/actions";
+import { assignEpo, unassignEpo } from "@/app/dashboard/actions";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getEpoColor } from "@/lib/epo-colors";
@@ -54,19 +53,13 @@ export function EpoAssignment({
   };
 
   const handleRemove = async (epoId: string) => {
-    // Optimistic update
     const prev = assigned;
     setAssigned(assigned.filter((a) => a.id !== epoId));
 
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("assignments")
-      .delete()
-      .eq("date", date)
-      .eq("epo_id", epoId);
-    if (error) {
-      console.error("Remove assignment failed:", error);
-      setAssigned(prev); // Revert
+    const result = await unassignEpo(date, epoId);
+    if (!result.ok) {
+      console.error("Remove assignment failed:", result.error);
+      setAssigned(prev);
     } else {
       router.refresh();
     }
