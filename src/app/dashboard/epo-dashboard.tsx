@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import type { DashboardEntry } from "@/types/schedule";
 import { SignOutButton } from "@/components/sign-out-button";
 import { ReportBugButton } from "@/components/report-bug-button";
@@ -11,6 +10,7 @@ import {
   DashboardFilters,
   type FilterOption,
 } from "@/components/dashboard-filters";
+import { nextFilterSearch, readFilterFromSearch } from "@/lib/dashboard/filter-url";
 
 const EPO_FILTERS = [
   { value: "all" as const, label: "My Assignments" },
@@ -35,17 +35,29 @@ export function EpoDashboard({
   range: { start: string; end: string };
 }) {
   const firstName = (userName ?? "").trim().split(/\s+/)[0] || "";
-  const params = useSearchParams();
-  const filter: FilterOption = (params.get("filter") as FilterOption | null) ?? "all";
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<FilterOption>("all");
+
+  // Read initial filter from URL once on mount. After mount, local state is
+  // the source of truth; URL sync goes the other way via replaceState.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: defer window.location read to client after hydration.
+    setFilter(readFilterFromSearch(window.location.search));
+  }, []);
+
+  function handleFilterChange(next: FilterOption) {
+    setFilter(next);
+    const qs = nextFilterSearch(window.location.search, next);
+    const url = `${window.location.pathname}${qs ? "?" + qs : ""}`;
+    // Shallow URL update — Next.js 16 routes window.history.replaceState
+    // through its internal store so useSearchParams stays in sync, but
+    // server components do NOT re-run.
+    window.history.replaceState(null, "", url);
+  }
 
   const filtered = useMemo(() => {
     let result = entries.filter((e) => assignedDates.includes(e.date));
 
-    // `e.isPast` is set by page.tsx from the date+today comparison. Snapshots
-    // always have isPast=true; live entries always have isPast=false. The
-    // picker range determines which dates appear in `entries` — this filter
-    // just narrows further to the past or future subset.
     switch (filter) {
       case "all":
         result = result.filter((e) => !e.isPast);
@@ -94,6 +106,8 @@ export function EpoDashboard({
           onSearchChange={setSearch}
           filters={EPO_FILTERS}
           range={range}
+          activeFilter={filter}
+          onFilterChange={handleFilterChange}
         />
       </div>
 
