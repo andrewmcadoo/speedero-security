@@ -116,7 +116,11 @@ export function EpoDashboard({
                 todayISO={todayISO}
                 tomorrowISO={tomorrowISO}
               />
-              <ScheduleDetailCard entry={entry} />
+              <ScheduleDetailCard
+                entry={entry}
+                todayISO={todayISO}
+                tomorrowISO={tomorrowISO}
+              />
             </div>
           ))}
         </div>
