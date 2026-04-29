@@ -18,13 +18,16 @@ export function ManagementDashboard({
   profileId,
   todayISO,
   tomorrowISO,
+  range,
 }: {
   entries: DashboardEntry[];
   epos: { id: string; fullName: string; email: string }[];
   profileId: string;
   todayISO: string;
   tomorrowISO: string;
+  range: { start: string; end: string };
 }) {
+  void range;
   const [filter, setFilter] = useState<FilterOption>("all");
   const [search, setSearch] = useState("");
 
