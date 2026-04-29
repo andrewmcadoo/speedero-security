@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { _assignEpoForTest, _setDetailLevelForTest, _unassignEpoForTest } from "./actions";
+import {
+  _assignEpoForTest,
+  _setDetailLevelForTest,
+  _unassignEpoForTest,
+  _createTravelLegForTest,
+  _updateTravelLegForTest,
+  _deleteTravelLegForTest,
+} from "./actions";
 
 // _assignEpoForTest is the testable inner function: it takes the (date, epoId,
 // supabaseFactory, now) and returns the action's outcome. The exported `assignEpo`
@@ -166,6 +173,77 @@ describe("setDetailLevel guard", () => {
       date: "2026-04-28",
       detail_level: "dual",
       updated_by: "mgr-uuid",
+    });
+  });
+});
+
+describe("travel-leg guards", () => {
+  const originalTz = process.env.APP_TIMEZONE;
+  afterEach(() => {
+    if (originalTz === undefined) delete process.env.APP_TIMEZONE;
+    else process.env.APP_TIMEZONE = originalTz;
+  });
+
+  test("createTravelLeg rejects past dates", async () => {
+    process.env.APP_TIMEZONE = "America/Los_Angeles";
+    const now = new Date("2026-04-28T15:00:00Z");
+    const result = await _createTravelLegForTest(
+      "2026-04-27",
+      "Pick up",
+      () => { throw new Error("must not be called"); },
+      now
+    );
+    expect(result.ok).toBe(false);
+  });
+
+  test("updateTravelLeg rejects past dates", async () => {
+    process.env.APP_TIMEZONE = "America/Los_Angeles";
+    const now = new Date("2026-04-28T15:00:00Z");
+    const result = await _updateTravelLegForTest(
+      "2026-04-27",
+      "Pick up",
+      { location: "X" },
+      () => { throw new Error("must not be called"); },
+      now
+    );
+    expect(result.ok).toBe(false);
+  });
+
+  test("deleteTravelLeg rejects past dates", async () => {
+    process.env.APP_TIMEZONE = "America/Los_Angeles";
+    const now = new Date("2026-04-28T15:00:00Z");
+    const result = await _deleteTravelLegForTest(
+      "2026-04-27",
+      "Pick up",
+      () => { throw new Error("must not be called"); },
+      now
+    );
+    expect(result.ok).toBe(false);
+  });
+
+  test("createTravelLeg inserts a row with date+action+created_by for valid date", async () => {
+    process.env.APP_TIMEZONE = "America/Los_Angeles";
+    const now = new Date("2026-04-28T15:00:00Z");
+    let inserted: Record<string, unknown> | null = null;
+    const result = await _createTravelLegForTest(
+      "2026-04-28",
+      "Pick up",
+      () => ({
+        auth: { getUser: async () => ({ data: { user: { id: "mgr-uuid" } } }) },
+        from: () => ({
+          insert: async (row: Record<string, unknown>) => {
+            inserted = row;
+            return { error: null };
+          },
+        }),
+      }),
+      now
+    );
+    expect(result.ok).toBe(true);
+    expect(inserted).toEqual({
+      date: "2026-04-28",
+      action: "Pick up",
+      created_by: "mgr-uuid",
     });
   });
 });

@@ -144,7 +144,6 @@ export function ManagementCard({
             date={entry.date}
             initialPickup={entry.pickupLeg}
             initialDropoff={entry.dropoffLeg}
-            profileId={profileId}
           />
         </div>
       )}
