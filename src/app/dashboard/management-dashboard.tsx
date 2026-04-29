@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { flushSync } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import type { DashboardEntry } from "@/types/schedule";
 import { SignOutButton } from "@/components/sign-out-button";
@@ -76,12 +77,31 @@ export function ManagementDashboard({
   ]);
   const todayCardOffScreen = useElementOffScreen(
     anchor.isToday ? anchorRef : { current: null },
-    128,
+    128,  // showBelowPx — banner appears once today is fully behind the chrome (chrome bottom = 128)
+    200,  // hideAbovePx — only hide once today is well back below chrome+banner (164) plus a buffer
   );
+  // Suppress the banner during the post-click smooth scroll. flushSync hides
+  // the banner synchronously so the chrome shrinks BEFORE scrollIntoView
+  // computes its target.
+  const [scrolling, setScrolling] = useState(false);
+  const handleJump = useCallback(() => {
+    flushSync(() => setScrolling(true));
+    jumpToToday();
+    setTimeout(() => setScrolling(false), 800);
+  }, [jumpToToday]);
+  const bannerVisible = anchor.isToday && todayCardOffScreen && !scrolling;
+  // Sync html scroll-padding-top with chrome height (transitioned in CSS).
+  useEffect(() => {
+    const html = document.documentElement;
+    html.style.setProperty("--snap-pad", bannerVisible ? "164px" : "128px");
+    return () => {
+      html.style.removeProperty("--snap-pad");
+    };
+  }, [bannerVisible]);
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-6">
-      <div className="sticky top-0 z-30 bg-black pt-6">
+      <div className="sticky top-0 z-30 bg-gray-950 pt-6 pb-2">
         <header className="mb-4 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold">Speedero Security</h1>
@@ -98,22 +118,27 @@ export function ManagementDashboard({
             <SignOutButton />
           </div>
         </header>
-        <div className="mb-4">
+        <div>
           <DashboardFilters
             searchQuery={search}
             onSearchChange={setSearch}
             range={range}
           />
         </div>
-      </div>
-
-      <div className="sticky top-32 z-20 bg-black pb-2">
-        <TodayBanner
-          todayISO={todayISO}
-          tomorrowISO={tomorrowISO}
-          visible={anchor.isToday && todayCardOffScreen}
-          onJumpToToday={jumpToToday}
-        />
+        <div
+          className={`overflow-hidden transition-[max-height] duration-300 ease-out ${
+            bannerVisible ? "max-h-9" : "max-h-0"
+          }`}
+        >
+          <div className="pt-2">
+            <TodayBanner
+              todayISO={todayISO}
+              tomorrowISO={tomorrowISO}
+              visible={true}
+              onJumpToToday={handleJump}
+            />
+          </div>
+        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -137,7 +162,7 @@ export function ManagementDashboard({
               <div
                 key={entry.date}
                 ref={isAnchor ? anchorRef : undefined}
-                className={`space-y-2 ${isAnchor ? "scroll-mt-32" : ""}`}
+                className="snap-start space-y-2"
               >
                 <DateHeader
                   dateStr={entry.date}

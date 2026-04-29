@@ -36,40 +36,53 @@ export function useTodayAnchor(
 }
 
 /**
- * Returns true when the referenced element is NOT intersecting the viewport.
+ * Returns true when the referenced element is "off-screen above" the viewport,
+ * with hysteresis to avoid feedback oscillation when the consumer's reaction
+ * to off-screen state changes the element's position (e.g. revealing a banner
+ * that grows the dashboard chrome and pushes the element back into view).
  *
- * `topOffsetPx` shrinks the effective viewport from the top so an element
- * that's behind the sticky header/filter chrome counts as "off-screen."
+ * - `showBelowPx`: while currently on-screen, transition to off-screen when
+ *   the element's bottom edge drops below this y in viewport coordinates.
+ *   Use 0 to mean "fully off-screen above".
+ * - `hideAbovePx`: while currently off-screen, transition back to on-screen
+ *   only when the element's bottom edge has come down past this y. Use a
+ *   value larger than the chrome's banner growth so the element doesn't
+ *   bounce back into view just from layout reflow.
  *
- * Returns `false` until the first observer callback fires (avoids a flash
- * of the banner before we know the answer).
+ * The gap between the two thresholds is the hysteresis band — pick it
+ * larger than any layout shift the off-screen state itself causes.
+ *
+ * Plain scroll-event polling rather than IntersectionObserver because the
+ * latter can't easily express asymmetric thresholds.
  */
 export function useElementOffScreen(
   ref: React.RefObject<HTMLElement | null>,
-  topOffsetPx: number,
+  showBelowPx: number,
+  hideAbovePx: number,
 ): boolean {
   const [offScreen, setOffScreen] = useState(false);
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (typeof IntersectionObserver === "undefined") return;
+    function check() {
+      const el = ref.current;
+      if (!el) {
+        setOffScreen(false);
+        return;
+      }
+      const bottom = el.getBoundingClientRect().bottom;
+      setOffScreen((prev) =>
+        prev ? bottom <= hideAbovePx : bottom < showBelowPx,
+      );
+    }
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        setOffScreen(!entry.isIntersecting);
-      },
-      {
-        // Negative top inset: the element must be visible BELOW the sticky
-        // chrome to count as "intersecting".
-        rootMargin: `-${topOffsetPx}px 0px 0px 0px`,
-        threshold: 0,
-      },
-    );
-
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [ref, topOffsetPx]);
+    check();
+    window.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("resize", check, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", check);
+      window.removeEventListener("resize", check);
+    };
+  }, [ref, showBelowPx, hideAbovePx]);
 
   return offScreen;
 }
