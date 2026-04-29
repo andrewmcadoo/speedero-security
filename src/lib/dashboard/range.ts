@@ -10,7 +10,11 @@ export interface DateRange {
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function defaultRange(today: string, role: Role): DateRange {
-  const start = role === "epo" ? addDays(today, -7) : today;
+  // Both roles see a small past window by default so recent snapshots
+  // are visible without needing to use the picker. EPO sees a full week
+  // back (assignment review); management sees two days (most recent
+  // history).
+  const start = role === "epo" ? addDays(today, -7) : addDays(today, -2);
   return { start, end: addDays(today, 30) };
 }
 

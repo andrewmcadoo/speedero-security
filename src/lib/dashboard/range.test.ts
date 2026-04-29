@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { parseRangeFromSearchParams } from "./range";
 
 describe("parseRangeFromSearchParams", () => {
-  test("returns management default (today..today+30) when nothing provided", () => {
+  test("returns management default (today-2..today+30) when nothing provided", () => {
     const range = parseRangeFromSearchParams({}, { today: "2026-04-28", role: "management" });
-    expect(range).toEqual({ start: "2026-04-28", end: "2026-05-28" });
+    expect(range).toEqual({ start: "2026-04-26", end: "2026-05-28" });
   });
 
   test("returns EPO default (today-7..today+30) when nothing provided", () => {
@@ -25,7 +25,7 @@ describe("parseRangeFromSearchParams", () => {
       { start: "not-a-date", end: "2026-03-15" },
       { today: "2026-04-28", role: "management" }
     );
-    expect(range.start).toBe("2026-04-28");
+    expect(range.start).toBe("2026-04-26");
   });
 
   test("swaps when start > end", () => {
