@@ -68,7 +68,7 @@ export async function assignEpo(
   const result = await _assignEpoForTest(
     date,
     epoId,
-    () => createClient() as unknown as SupabaseLike,
+    async () => (await createClient()) as unknown as SupabaseLike,
     new Date()
   );
   if (result.ok) revalidatePath("/dashboard");
