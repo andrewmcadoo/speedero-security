@@ -145,3 +145,50 @@ describe("fetchAllLiveSourcesCached — sync miss after STALE_MS", () => {
     expect(callCount()).toBe(2);
   });
 });
+
+describe("fetchAllLiveSourcesCached — concurrent miss dedupe", () => {
+  test("two parallel calls during a cold miss share one fetch", async () => {
+    const sourcesA = makeSources("A");
+    let resolve!: (v: AssembleSources) => void;
+    let calls = 0;
+    const fetcher: (s: SupabaseClient, t: string) => Promise<AssembleSources> = () => {
+      calls++;
+      return new Promise<AssembleSources>((res) => {
+        resolve = res;
+      });
+    };
+    const now = () => 1_000_000;
+
+    const p1 = _fetchAllLiveSourcesCachedForTest(STUB_SUPABASE, "2026-04-28", fetcher, now);
+    const p2 = _fetchAllLiveSourcesCachedForTest(STUB_SUPABASE, "2026-04-28", fetcher, now);
+
+    expect(calls).toBe(1); // both callers share one fetch.
+
+    resolve(sourcesA);
+    expect(await p1).toBe(sourcesA);
+    expect(await p2).toBe(sourcesA);
+    expect(calls).toBe(1);
+  });
+
+  test("a fetch failure does not pin the cache; next caller retries", async () => {
+    let calls = 0;
+    let mode: "fail" | "succeed" = "fail";
+    const sourcesA = makeSources("A");
+    const fetcher: (s: SupabaseClient, t: string) => Promise<AssembleSources> = async () => {
+      calls++;
+      if (mode === "fail") throw new Error("boom");
+      return sourcesA;
+    };
+    const now = () => 1_000_000;
+
+    await expect(
+      _fetchAllLiveSourcesCachedForTest(STUB_SUPABASE, "2026-04-28", fetcher, now)
+    ).rejects.toThrow("boom");
+    expect(_peekForTest()).toBeNull();
+
+    mode = "succeed";
+    const r = await _fetchAllLiveSourcesCachedForTest(STUB_SUPABASE, "2026-04-28", fetcher, now);
+    expect(r).toBe(sourcesA);
+    expect(calls).toBe(2);
+  });
+});

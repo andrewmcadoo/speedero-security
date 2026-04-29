@@ -48,15 +48,35 @@ export async function _fetchAllLiveSourcesCachedForTest(
       return cache.value;
     }
   }
-  const value = await fetcher(supabase, today);
+
+  // Concurrent-miss dedupe: if a fetch is already in flight for this `today`,
+  // share its promise rather than fanning out a second call.
+  if (cache && cache.today === today && cache.pendingFetch) {
+    return cache.pendingFetch;
+  }
+
+  const promise = fetcher(supabase, today);
   cache = {
     today,
-    fetchedAt: now(),
+    fetchedAt: 0, // not yet finalized — will be set on success.
     refreshing: false,
-    value,
-    pendingFetch: null,
+    value: undefined as unknown as AssembleSources,
+    pendingFetch: promise,
   };
-  return value;
+  try {
+    const value = await promise;
+    cache = {
+      today,
+      fetchedAt: now(),
+      refreshing: false,
+      value,
+      pendingFetch: null,
+    };
+    return value;
+  } catch (err) {
+    cache = null; // don't pin a failure — next caller retries.
+    throw err;
+  }
 }
 
 function kickOffBackgroundRefresh(
