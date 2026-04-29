@@ -4,6 +4,7 @@ import { fetchSchedule } from "@/lib/google-sheets";
 import { fetchTransitions } from "@/lib/google-calendar";
 import type { ScheduleEntry, DashboardEntry, DetailLevel, TravelLeg, Transition } from "@/types/schedule";
 import { isThisWeek, isNextWeek, getAnchorDates, isoDateInTz } from "@/lib/schedule-utils";
+import { assembleDashboardEntry } from "@/lib/snapshot/assemble";
 import { EpoDashboard } from "./epo-dashboard";
 import { ManagementDashboard } from "./management-dashboard";
 import { redirect } from "next/navigation";
@@ -154,18 +155,18 @@ export default async function DashboardPage() {
     const entries: DashboardEntry[] = schedule
       .filter((s) => s.date >= today)
       .map((s) => {
-        const setting = settingsMap.get(s.date);
-        const legs = travelLegsByDate.get(s.date);
+        const base = assembleDashboardEntry(s.date, {
+          schedule,
+          transitionsByDate,
+          assignmentsByDate,
+          travelLegsByDate,
+          settingsMap,
+        })!; // safe: we just iterated over schedule
         return {
-          ...s,
-          detailLevel: setting?.detailLevel ?? "single",
-          assignedEpos: assignmentsByDate.get(s.date) ?? [],
+          ...base,
           isPast: s.date < today,
           isThisWeek: isThisWeek(s.date),
           isNextWeek: isNextWeek(s.date),
-          pickupLeg: legs?.pickup,
-          dropoffLeg: legs?.dropoff,
-          transitions: transitionsByDate.get(s.date) ?? [],
         };
       });
 
@@ -218,20 +219,21 @@ export default async function DashboardPage() {
   }
 
   const entries: DashboardEntry[] = schedule.map((s) => {
-    const setting = settingsMap.get(s.date);
-    const legs = assignedDateSet.has(s.date)
-      ? travelLegsByDate.get(s.date)
-      : undefined;
+    const base = assembleDashboardEntry(s.date, {
+      schedule,
+      transitionsByDate,
+      assignmentsByDate,
+      travelLegsByDate,
+      settingsMap,
+    })!;
+    const isAssigned = assignedDateSet.has(s.date);
     return {
-      ...s,
-      detailLevel: setting?.detailLevel ?? "single",
-      assignedEpos: assignmentsByDate.get(s.date) ?? [],
+      ...base,
+      pickupLeg: isAssigned ? base.pickupLeg : undefined,
+      dropoffLeg: isAssigned ? base.dropoffLeg : undefined,
       isPast: s.date < today,
       isThisWeek: isThisWeek(s.date),
       isNextWeek: isNextWeek(s.date),
-      pickupLeg: legs?.pickup,
-      dropoffLeg: legs?.dropoff,
-      transitions: transitionsByDate.get(s.date) ?? [],
     };
   });
 
