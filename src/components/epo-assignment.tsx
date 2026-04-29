@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { assignEpo } from "@/app/dashboard/actions";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getEpoColor } from "@/lib/epo-colors";
@@ -43,14 +44,9 @@ export function EpoAssignment({
     setAssigned([...assigned, epo]);
     setShowDropdown(false);
 
-    const supabase = createClient();
-    const { error } = await supabase.from("assignments").insert({
-      date,
-      epo_id: epo.id,
-      assigned_by: profileId,
-    });
-    if (error) {
-      console.error("Assignment failed:", error.message, error.code, error.details, error.hint);
+    const result = await assignEpo(date, epo.id);
+    if (!result.ok) {
+      console.error("Assignment failed:", result.error);
       setAssigned(prev); // Revert
     } else {
       router.refresh();
