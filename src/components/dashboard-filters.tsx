@@ -1,5 +1,8 @@
 "use client";
 
+import { DateRangeControl } from "./date-range-control";
+import type { DateRange } from "@/lib/dashboard/range";
+
 export type FilterOption = "all" | "unassigned" | "my-assignments" | "this-week" | "next-week" | "past-assignments";
 
 interface FilterDef {
@@ -20,12 +23,14 @@ export function DashboardFilters({
   searchQuery,
   onSearchChange,
   filters = DEFAULT_FILTERS,
+  range,
 }: {
   active: FilterOption;
   onChange: (filter: FilterOption) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
   filters?: FilterDef[];
+  range: DateRange;
 }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -44,13 +49,16 @@ export function DashboardFilters({
           </button>
         ))}
       </div>
-      <input
-        type="text"
-        placeholder="Search..."
-        value={searchQuery}
-        onChange={(e) => onSearchChange(e.target.value)}
-        className="rounded-md bg-gray-800 px-3 py-1.5 text-xs text-gray-300 placeholder-gray-500 outline-none ring-1 ring-gray-700 focus:ring-gray-500"
-      />
+      <div className="flex items-center gap-2">
+        <DateRangeControl range={range} />
+        <input
+          type="text"
+          placeholder="Search..."
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          className="rounded-md bg-gray-800 px-3 py-1.5 text-xs text-gray-300 placeholder-gray-500 outline-none ring-1 ring-gray-700 focus:ring-gray-500"
+        />
+      </div>
     </div>
   );
 }

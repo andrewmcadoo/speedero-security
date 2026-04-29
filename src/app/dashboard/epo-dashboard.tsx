@@ -33,7 +33,6 @@ export function EpoDashboard({
   tomorrowISO: string;
   range: { start: string; end: string };
 }) {
-  void range;
   const firstName = (userName ?? "").trim().split(/\s+/)[0] || "";
   const [filter, setFilter] = useState<FilterOption>("all");
   const [search, setSearch] = useState("");
@@ -94,6 +93,7 @@ export function EpoDashboard({
           searchQuery={search}
           onSearchChange={setSearch}
           filters={EPO_FILTERS}
+          range={range}
         />
       </div>
 
