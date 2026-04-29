@@ -59,6 +59,14 @@ export async function runSnapshotForCron(
   const existing = await getSnapshotDates(supabase, candidates);
   const missing = selectMissingDatesForCron(today, existing);
 
+  if (missing.length === 0) {
+    return {
+      snapshotted: [],
+      unrecoverable: [],
+      alreadyFrozen: Array.from(existing),
+    };
+  }
+
   const sources = await fetchAllLiveSources(supabase, today);
 
   return runSnapshotForDates(supabase, missing, sources, "cron", existing);
@@ -129,7 +137,9 @@ export async function fetchAllLiveSources(
           endDate: sheetMaxDate,
         });
 
-  // Bucket the raw rows just like dashboard/page.tsx does.
+  // Bucket the raw rows. Unlike dashboard/page.tsx, we do NOT filter to
+  // `knownDates` — a snapshot for a past date may need transitions for a
+  // schedule row that has since rolled out of the live sheet.
   const transitionsByDate = new Map<string, Transition[]>();
   for (const t of transitions) {
     const date = isoDateInTz(t.startsAt, t.tz);
