@@ -1,10 +1,15 @@
 "use client";
 
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { DateRangeControl } from "./date-range-control";
 import type { DateRange } from "@/lib/dashboard/range";
 
-export type FilterOption = "all" | "unassigned" | "my-assignments" | "this-week" | "next-week" | "past-assignments";
+export type FilterOption =
+  | "all"
+  | "unassigned"
+  | "my-assignments"
+  | "this-week"
+  | "next-week"
+  | "past-assignments";
 
 interface FilterDef {
   value: FilterOption;
@@ -23,39 +28,23 @@ export function DashboardFilters({
   onSearchChange,
   filters = DEFAULT_FILTERS,
   range,
+  activeFilter,
+  onFilterChange,
 }: {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   filters?: FilterDef[];
   range: DateRange;
+  activeFilter: FilterOption | null;
+  onFilterChange: (value: FilterOption) => void;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const params = useSearchParams();
-
-  const hasCustomRange = params.has("start") || params.has("end") || params.has("date");
-  const activeFilter: FilterOption | null = hasCustomRange
-    ? null
-    : ((params.get("filter") as FilterOption | null) ?? "all");
-
-  function handlePillClick(value: FilterOption) {
-    const sp = new URLSearchParams(params.toString());
-    sp.delete("start");
-    sp.delete("end");
-    sp.delete("date");
-    if (value === "all") sp.delete("filter");
-    else sp.set("filter", value);
-    const qs = sp.toString();
-    router.push(`${pathname}${qs ? "?" + qs : ""}`);
-  }
-
   return (
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div className="flex gap-1.5">
         {filters.map((f) => (
           <button
             key={f.value}
-            onClick={() => handlePillClick(f.value)}
+            onClick={() => onFilterChange(f.value)}
             className={`rounded-full px-3 py-1 text-xs transition-colors ${
               activeFilter === f.value
                 ? "bg-blue-900/60 text-blue-400"
