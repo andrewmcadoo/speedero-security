@@ -1,11 +1,11 @@
 "use client";
 
-import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import type { TravelLeg } from "@/types/schedule";
 import { ConfirmDialog } from "./confirm-dialog";
 import { TravelDetailsSection } from "./travel-details-section";
+import { createTravelLeg, updateTravelLeg, deleteTravelLeg, type TravelLegFields } from "@/app/dashboard/actions";
 
 type Action = "Pick up" | "Drop off";
 
@@ -13,7 +13,6 @@ interface TeakToggleProps {
   date: string;
   initialPickup?: TravelLeg;
   initialDropoff?: TravelLeg;
-  profileId: string;
 }
 
 const actionLabel = (a: Action): string =>
@@ -66,7 +65,7 @@ function emptyLeg(date: string, action: Action): TravelLeg {
   };
 }
 
-export function TeakToggle({ date, initialPickup, initialDropoff, profileId }: TeakToggleProps) {
+export function TeakToggle({ date, initialPickup, initialDropoff }: TeakToggleProps) {
   const [pickup, setPickup] = useState<TravelLeg | undefined>(initialPickup);
   const [dropoff, setDropoff] = useState<TravelLeg | undefined>(initialDropoff);
   const [pickupFields, setPickupFields] = useState<FieldState>(() => toFieldState(initialPickup));
@@ -100,14 +99,9 @@ export function TeakToggle({ date, initialPickup, initialDropoff, profileId }: T
     setLeg(newLeg);
     setFields(toFieldState(newLeg));
     setFormOpen(true);
-    const supabase = createClient();
-    const { error } = await supabase.from("travel_legs").insert({
-      date,
-      action,
-      created_by: profileId,
-    });
-    if (error) {
-      console.error("Insert travel leg failed:", error.message, error.code, error.details, error.hint);
+    const result = await createTravelLeg(date, action);
+    if (!result.ok) {
+      console.error("Insert travel leg failed:", result.error);
       setLeg(undefined);
       setFormOpen(false);
     } else {
@@ -123,17 +117,10 @@ export function TeakToggle({ date, initialPickup, initialDropoff, profileId }: T
     const prev = leg;
     setLeg(undefined);
     setFormOpen(false);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("travel_legs")
-      .delete()
-      .eq("date", date)
-      .eq("action", action);
-    if (error) {
-      console.error("Delete travel leg failed:", error.message, error.code, error.details, error.hint);
+    const result = await deleteTravelLeg(date, action);
+    if (!result.ok) {
+      console.error("Delete travel leg failed:", result.error);
       setLeg(prev);
-    } else {
-      router.refresh();
     }
     setSaving(false);
   };
@@ -145,22 +132,12 @@ export function TeakToggle({ date, initialPickup, initialDropoff, profileId }: T
     setSaving(true);
     const fields = action === "Pick up" ? pickupFields : dropoffFields;
 
-    const updatePayload: Record<string, string> = { updated_at: new Date().toISOString() };
-    for (const def of fieldDefs) {
-      updatePayload[def.column] = fields[def.key];
-    }
-
     const prev = leg;
     setLeg({ ...leg, ...fields });
 
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("travel_legs")
-      .update(updatePayload)
-      .eq("date", date)
-      .eq("action", action);
-    if (error) {
-      console.error("Save travel leg failed:", error.message, error.code, error.details, error.hint);
+    const result = await updateTravelLeg(date, action, fields as TravelLegFields);
+    if (!result.ok) {
+      console.error("Save travel leg failed:", result.error);
       setLeg(prev);
     } else {
       router.refresh();

@@ -142,3 +142,124 @@ export async function setDetailLevel(
   if (result.ok) revalidatePath("/dashboard");
   return result;
 }
+
+// ---- travel-leg actions ----
+
+type TravelAction = "Pick up" | "Drop off";
+
+const TRAVEL_LEG_COLUMNS: Record<string, string> = {
+  location: "location",
+  time: "time",
+  companion: "companion",
+  companionPrePositionFlight: "companion_pre_position_flight",
+  teakFlight: "teak_flight",
+  companionReturnFlight: "companion_return_flight",
+};
+
+export async function _createTravelLegForTest(
+  date: string,
+  action: TravelAction,
+  factory: SupabaseFactory,
+  now: Date
+): Promise<ActionResult> {
+  return withGuard(date, now, async (supabase, userId) => {
+    const { error } = await supabase.from("travel_legs").insert({
+      date,
+      action,
+      created_by: userId,
+    });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }, factory);
+}
+
+export async function createTravelLeg(
+  date: string,
+  action: TravelAction
+): Promise<ActionResult> {
+  const result = await _createTravelLegForTest(
+    date,
+    action,
+    async () => (await createClient()) as unknown as SupabaseLike,
+    new Date()
+  );
+  if (result.ok) revalidatePath("/dashboard");
+  return result;
+}
+
+export type TravelLegFields = Partial<{
+  location: string;
+  time: string;
+  companion: string;
+  companionPrePositionFlight: string;
+  teakFlight: string;
+  companionReturnFlight: string;
+}>;
+
+export async function _updateTravelLegForTest(
+  date: string,
+  action: TravelAction,
+  fields: TravelLegFields,
+  factory: SupabaseFactory,
+  now: Date
+): Promise<ActionResult> {
+  return withGuard(date, now, async (supabase) => {
+    const payload: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+    for (const [key, val] of Object.entries(fields)) {
+      const col = TRAVEL_LEG_COLUMNS[key];
+      if (col !== undefined && val !== undefined) payload[col] = val;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const builder: any = supabase.from("travel_legs").update!(payload);
+    const { error } = await builder.eq("date", date).eq("action", action);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }, factory);
+}
+
+export async function updateTravelLeg(
+  date: string,
+  action: TravelAction,
+  fields: TravelLegFields
+): Promise<ActionResult> {
+  const result = await _updateTravelLegForTest(
+    date,
+    action,
+    fields,
+    async () => (await createClient()) as unknown as SupabaseLike,
+    new Date()
+  );
+  if (result.ok) revalidatePath("/dashboard");
+  return result;
+}
+
+export async function _deleteTravelLegForTest(
+  date: string,
+  action: TravelAction,
+  factory: SupabaseFactory,
+  now: Date
+): Promise<ActionResult> {
+  return withGuard(date, now, async (supabase) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const builder: any = supabase.from("travel_legs").delete!();
+    const { error } = await builder.eq("date", date).eq("action", action);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }, factory);
+}
+
+export async function deleteTravelLeg(
+  date: string,
+  action: TravelAction
+): Promise<ActionResult> {
+  const result = await _deleteTravelLegForTest(
+    date,
+    action,
+    async () => (await createClient()) as unknown as SupabaseLike,
+    new Date()
+  );
+  if (result.ok) revalidatePath("/dashboard");
+  return result;
+}
