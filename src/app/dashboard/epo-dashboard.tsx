@@ -1,16 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { DashboardEntry } from "@/types/schedule";
 import { SignOutButton } from "@/components/sign-out-button";
 import { ReportBugButton } from "@/components/report-bug-button";
 import { DateHeader } from "@/components/date-header";
 import { ScheduleDetailCard } from "@/components/schedule-detail-card";
-import {
-  DashboardFilters,
-  type FilterOption,
-} from "@/components/dashboard-filters";
-import { nextFilterSearch, readFilterFromSearch } from "@/lib/dashboard/filter-url";
+import { DashboardFilters } from "@/components/dashboard-filters";
+import { readFilterFromSearch } from "@/lib/dashboard/filter-url";
 
 const EPO_FILTERS = [
   { value: "all" as const, label: "My Assignments" },
@@ -36,24 +34,11 @@ export function EpoDashboard({
 }) {
   const firstName = (userName ?? "").trim().split(/\s+/)[0] || "";
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<FilterOption>("all");
-
-  // Read initial filter from URL once on mount. After mount, local state is
-  // the source of truth; URL sync goes the other way via replaceState.
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: defer window.location read to client after hydration.
-    setFilter(readFilterFromSearch(window.location.search));
-  }, []);
-
-  function handleFilterChange(next: FilterOption) {
-    setFilter(next);
-    const qs = nextFilterSearch(window.location.search, next);
-    const url = `${window.location.pathname}${qs ? "?" + qs : ""}`;
-    // Shallow URL update — Next.js 16 routes window.history.replaceState
-    // through its internal store so useSearchParams stays in sync, but
-    // server components do NOT re-run.
-    window.history.replaceState(null, "", url);
-  }
+  const params = useSearchParams();
+  // Filter is URL-derived. Pill clicks update URL via replaceState (or
+  // router.push when a custom range needs to be dropped); useSearchParams
+  // is reactive to both, so this stays in sync without local state.
+  const filter = readFilterFromSearch(params.toString());
 
   const filtered = useMemo(() => {
     let result = entries.filter((e) => assignedDates.includes(e.date));
@@ -106,8 +91,6 @@ export function EpoDashboard({
           onSearchChange={setSearch}
           filters={EPO_FILTERS}
           range={range}
-          activeFilter={filter}
-          onFilterChange={handleFilterChange}
         />
       </div>
 

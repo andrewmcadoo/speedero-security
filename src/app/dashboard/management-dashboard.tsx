@@ -1,16 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import type { DashboardEntry } from "@/types/schedule";
 import { SignOutButton } from "@/components/sign-out-button";
 import { ReportBugButton } from "@/components/report-bug-button";
 import { DateHeader } from "@/components/date-header";
 import { ManagementCard } from "@/components/management-card";
-import {
-  DashboardFilters,
-  type FilterOption,
-} from "@/components/dashboard-filters";
-import { nextFilterSearch, readFilterFromSearch } from "@/lib/dashboard/filter-url";
+import { DashboardFilters } from "@/components/dashboard-filters";
+import { readFilterFromSearch } from "@/lib/dashboard/filter-url";
 import Link from "next/link";
 
 export function ManagementDashboard({
@@ -29,20 +27,8 @@ export function ManagementDashboard({
   range: { start: string; end: string };
 }) {
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<FilterOption>("all");
-
-  // Defer URL read to client after hydration to avoid SSR/CSR mismatch.
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: see comment above.
-    setFilter(readFilterFromSearch(window.location.search));
-  }, []);
-
-  function handleFilterChange(next: FilterOption) {
-    setFilter(next);
-    const qs = nextFilterSearch(window.location.search, next);
-    const url = `${window.location.pathname}${qs ? "?" + qs : ""}`;
-    window.history.replaceState(null, "", url);
-  }
+  const params = useSearchParams();
+  const filter = readFilterFromSearch(params.toString());
 
   const filtered = useMemo(() => {
     let result = entries;
@@ -95,8 +81,6 @@ export function ManagementDashboard({
           searchQuery={search}
           onSearchChange={setSearch}
           range={range}
-          activeFilter={filter}
-          onFilterChange={handleFilterChange}
         />
       </div>
 
