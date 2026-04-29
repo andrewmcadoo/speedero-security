@@ -4,10 +4,10 @@ import { NextResponse, type NextRequest } from "next/server";
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Snapshot cron endpoint authenticates via shared bearer token in its own
-  // route handler; skip the cookie-session middleware entirely so curl from
-  // the systemd timer (no session) is not redirected to /login.
-  if (pathname === "/api/snapshot/run") {
+  // Snapshot cron endpoints authenticate via shared bearer token in their own
+  // route handlers; skip the cookie-session middleware entirely so curl from
+  // the systemd timers (no session) is not redirected to /login.
+  if (pathname.startsWith("/api/snapshot/")) {
     return NextResponse.next({ request });
   }
 

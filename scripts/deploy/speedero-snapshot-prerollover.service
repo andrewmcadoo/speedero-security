@@ -1,0 +1,14 @@
+[Unit]
+Description=Speedero Security — pre-rollover snapshot
+After=network-online.target speedero-security.service
+Requires=speedero-security.service
+
+[Service]
+Type=oneshot
+User=andrew
+EnvironmentFile=/data/SecApp/shared/.env.production
+ExecStart=/usr/bin/curl -fsS \
+  -H "Authorization: Bearer ${SNAPSHOT_CRON_TOKEN}" \
+  -X POST http://127.0.0.1:3000/SecApp/api/snapshot/prerollover
+StandardOutput=journal
+StandardError=journal

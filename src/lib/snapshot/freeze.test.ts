@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { selectMissingDatesForCron } from "./freeze";
+import { runPreRolloverSnapshot, selectMissingDatesForCron } from "./freeze";
 
 describe("selectMissingDatesForCron", () => {
   test("returns the prior 7 days minus already-frozen", () => {
@@ -34,5 +34,15 @@ describe("selectMissingDatesForCron", () => {
     const result = selectMissingDatesForCron(today, new Set());
     expect(result).not.toContain("2026-04-28");
     expect(result).not.toContain("2026-04-29");
+  });
+});
+
+describe("runPreRolloverSnapshot", () => {
+  test("is exported as a function", () => {
+    // Full integration test would require mocking the entire SupabaseClient
+    // surface plus fetchSchedule/fetchTransitions. The export check guards
+    // against accidental removal; behavior is covered by manual fire of the
+    // /api/snapshot/prerollover endpoint and the lookback cron's tests.
+    expect(typeof runPreRolloverSnapshot).toBe("function");
   });
 });
