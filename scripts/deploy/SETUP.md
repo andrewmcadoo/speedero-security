@@ -99,3 +99,42 @@ sudo -u andrew ln -sfn /data/SecApp/releases/<previous-ts> /data/SecApp/current.
 sudo -u andrew mv -Tf /data/SecApp/current.new /data/SecApp/current
 sudo systemctl restart speedero-security
 ```
+
+## Nightly snapshot timer
+
+The dashboard freezes past cards into `card_snapshots` via a systemd timer that POSTs to a loopback endpoint nightly. Install on Clipper once:
+
+1. Generate a token and add it to the env file:
+   ```bash
+   token=$(openssl rand -hex 32)
+   echo "SNAPSHOT_CRON_TOKEN=$token" | sudo tee -a /data/SecApp/shared/.env.production
+   ```
+2. Restart the app so it picks up the new var:
+   ```bash
+   sudo systemctl restart speedero-security
+   ```
+3. Install the timer + service units:
+   ```bash
+   sudo cp /data/SecApp/current/scripts/deploy/speedero-snapshot.service /etc/systemd/system/
+   sudo cp /data/SecApp/current/scripts/deploy/speedero-snapshot.timer /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now speedero-snapshot.timer
+   ```
+4. Sanity-check:
+   ```bash
+   systemctl list-timers speedero-snapshot.timer
+   sudo systemctl start speedero-snapshot.service   # fire once, immediately
+   sudo journalctl -u speedero-snapshot --since "5 min ago"
+   ```
+   Expected log line includes `snapshotted=[...]` etc.
+
+### Token rotation
+
+Both `speedero-security.service` and `speedero-snapshot.service` load `/data/SecApp/shared/.env.production`. To rotate:
+
+```bash
+new_token=$(openssl rand -hex 32)
+sudo sed -i "s/^SNAPSHOT_CRON_TOKEN=.*/SNAPSHOT_CRON_TOKEN=$new_token/" /data/SecApp/shared/.env.production
+sudo systemctl restart speedero-security
+# The timer will pick up the new token on its next fire; no restart needed for the timer itself.
+```
