@@ -41,6 +41,10 @@ export function EpoDashboard({
   const filtered = useMemo(() => {
     let result = entries.filter((e) => assignedDates.includes(e.date));
 
+    // `e.isPast` is set by page.tsx from the date+today comparison. Snapshots
+    // always have isPast=true; live entries always have isPast=false. The
+    // picker range determines which dates appear in `entries` — this filter
+    // just narrows further to the past or future subset.
     switch (filter) {
       case "all":
         result = result.filter((e) => !e.isPast);
