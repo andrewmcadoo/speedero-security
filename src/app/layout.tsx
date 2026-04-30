@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -15,6 +15,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Speedero Security",
   description: "EPO assignment and schedule management",
+};
+
+// viewport-fit=cover lets env(safe-area-inset-*) return non-zero values on
+// iOS Safari with a notch / dynamic island, so the sticky chrome can extend
+// its bg under the URL-bar overlay zone.
+export const viewport: Viewport = {
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

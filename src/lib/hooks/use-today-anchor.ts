@@ -91,3 +91,33 @@ export function useElementOffScreen(
 export function useAnchorRef<T extends HTMLElement = HTMLDivElement>() {
   return useRef<T | null>(null);
 }
+
+/**
+ * Tracks an element's outer height via ResizeObserver. Returns 0 until the
+ * element mounts, so callers must guard against the zero-state (otherwise
+ * scroll-padding/thresholds would jump to 0 on first paint).
+ *
+ * Uses borderBoxSize so padding and borders are included — the consumer
+ * generally wants "where is the bottom of this element," not its content box.
+ */
+export function useElementHeight(
+  ref: React.RefObject<HTMLElement | null>,
+): number {
+  const [height, setHeight] = useState(0);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      const box = entry.borderBoxSize?.[0];
+      const h = box ? box.blockSize : entry.contentRect.height;
+      setHeight(h);
+    });
+    ro.observe(el);
+    setHeight(el.getBoundingClientRect().height);
+    return () => ro.disconnect();
+  }, [ref]);
+
+  return height;
+}

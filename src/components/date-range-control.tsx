@@ -181,7 +181,7 @@ function PopoverContents({
     : range;
 
   return (
-    <div className="absolute right-0 top-full z-10 mt-1 w-72 rounded-md bg-gray-900 p-3 shadow-lg ring-1 ring-gray-700">
+    <div className="absolute left-0 top-full z-10 mt-1 w-72 max-w-[calc(100vw-2rem)] rounded-md bg-gray-900 p-3 shadow-lg ring-1 ring-gray-700 sm:left-auto sm:right-0">
       <div className="mb-2 flex items-center justify-between">
         <button onClick={() => shiftMonth(-1)} className="px-2 text-gray-400 hover:text-gray-100">‹</button>
         <div className="text-xs font-semibold text-gray-200">{monthLabel}</div>

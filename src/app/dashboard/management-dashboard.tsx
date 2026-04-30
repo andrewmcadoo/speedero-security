@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import type { DashboardEntry } from "@/types/schedule";
@@ -13,11 +13,15 @@ import { readFilterFromSearch } from "@/lib/dashboard/filter-url";
 import { findAnchorDate } from "@/lib/dashboard/today-anchor";
 import {
   useAnchorRef,
+  useElementHeight,
   useElementOffScreen,
   useTodayAnchor,
 } from "@/lib/hooks/use-today-anchor";
 import { TodayBanner } from "@/components/today-banner";
 import Link from "next/link";
+
+const HIDE_BUFFER = 36;
+const FALLBACK_CHROME = 128;
 
 export function ManagementDashboard({
   entries,
@@ -75,33 +79,46 @@ export function ManagementDashboard({
     filtered.length,
     filter,
   ]);
-  const todayCardOffScreen = useElementOffScreen(
-    anchor.isToday ? anchorRef : { current: null },
-    128,  // showBelowPx — banner appears once today is fully behind the chrome (chrome bottom = 128)
-    200,  // hideAbovePx — only hide once today is well back below chrome+banner (164) plus a buffer
-  );
+
+  // See epo-dashboard.tsx for rationale — measure the chrome so snap padding
+  // and off-screen thresholds match the actual rendered height (filter row
+  // wraps on mobile, so a hardcoded 128 leaves card tops behind the chrome).
+  const chromeRef = useRef<HTMLDivElement | null>(null);
+  const chromeHeight = useElementHeight(chromeRef);
   // Suppress the banner during the post-click smooth scroll. flushSync hides
   // the banner synchronously so the chrome shrinks BEFORE scrollIntoView
   // computes its target.
   const [scrolling, setScrolling] = useState(false);
+  const liveChrome = chromeHeight || FALLBACK_CHROME;
+  const todayCardOffScreen = useElementOffScreen(
+    anchor.isToday ? anchorRef : { current: null },
+    liveChrome,
+    liveChrome + HIDE_BUFFER,
+  );
   const handleJump = useCallback(() => {
     flushSync(() => setScrolling(true));
     jumpToToday();
     setTimeout(() => setScrolling(false), 800);
   }, [jumpToToday]);
   const bannerVisible = anchor.isToday && todayCardOffScreen && !scrolling;
-  // Sync html scroll-padding-top with chrome height (transitioned in CSS).
+
   useEffect(() => {
-    const html = document.documentElement;
-    html.style.setProperty("--snap-pad", bannerVisible ? "164px" : "128px");
+    const px = chromeHeight > 0 ? chromeHeight : FALLBACK_CHROME;
+    document.documentElement.style.setProperty("--snap-pad", `${px}px`);
+  }, [chromeHeight]);
+  useEffect(() => {
     return () => {
-      html.style.removeProperty("--snap-pad");
+      document.documentElement.style.removeProperty("--snap-pad");
     };
-  }, [bannerVisible]);
+  }, []);
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-6">
-      <div className="sticky top-0 z-30 bg-gray-950 pt-6 pb-2">
+      <div
+        ref={chromeRef}
+        data-chrome-h={chromeHeight || undefined}
+        className="sticky top-0 z-30 bg-gray-950 pb-2 pt-[max(1.5rem,env(safe-area-inset-top))]"
+      >
         <header className="mb-4 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold">Speedero Security</h1>
