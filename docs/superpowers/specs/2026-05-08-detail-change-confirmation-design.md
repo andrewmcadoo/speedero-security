@@ -156,15 +156,19 @@ Hi,
   Previous:   {oldLevelLabel}
 
 Schedule for that day:
-  Destination: {scheduleEntry.destination or "—"}
-  Location:    {scheduleEntry.location or "—"}
-  Time:        {scheduleEntry.startTime}–{scheduleEntry.endTime or "—"}
-  Status:      {scheduleEntry.status or "—"}
+  Activity:     {scheduleEntry.activity or "—"}
+  Location:     {scheduleEntry.location or "—"}
+  Departure:    {departure.airport} {departure.fbo} @ {departure.time}
+  Arrival:      {arrival.airport} {arrival.fbo} @ {arrival.time}
+  Confirmation: {scheduleEntry.confirmationStatus}
+  Teak Night:   {yes / no}
 
 Open dashboard: {appUrl}/dashboard?date={YYYY-MM-DD}
 
 — Speedero Security
 ```
+
+Empty fields render as `—`. If a departure/arrival sub-object has no airport/fbo/time, the whole line collapses to `—`. The schedule entry comes from `fetchAllLiveSourcesCached(supabase, today).schedule`, filtered to `date`.
 
 **HTML body:** the same content rendered in a single dark-on-light card with inline styles. No external assets.
 
@@ -216,6 +220,7 @@ Plus one read from the existing config (or new if not present):
 
 ## Open items for implementation
 
-- Confirm whether `getProfileById` and `getScheduleEntryForDate` already exist in `src/lib/supabase/queries.ts` or need to be added.
-- Confirm exact field names on `ScheduleEntry` for the email body (`destination`, `location`, `startTime`, `endTime`, `status`) — verify against `src/types/schedule.ts` during the implementation plan.
+- `src/lib/supabase/queries.ts` exposes `getProfile` (current user only). The new action will need either `getProfileById(supabase, userId)` or an inline select; the plan adds a small helper.
+- Schedule entries come from `fetchAllLiveSourcesCached(supabase, today).schedule`, not a dedicated query. The action filters that array to `date`. Cache hits keep this cheap.
+- `ScheduleEntry` field names verified against `src/types/schedule.ts` (see Email content section).
 - Confirm sender domain verification status with Resend before first send.
