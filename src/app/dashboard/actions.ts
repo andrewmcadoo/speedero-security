@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { assertNotPast, PastDateWriteError } from "@/lib/access-control";
 import { invalidateLiveSourcesCache } from "@/lib/snapshot/live-cache";
+import { broadcastChanged } from "@/lib/sse/hub";
 import { revalidatePath } from "next/cache";
 import type { DetailLevel } from "@/types/schedule";
 
@@ -75,6 +76,7 @@ export async function assignEpo(
   );
   if (result.ok) {
     invalidateLiveSourcesCache();
+    broadcastChanged();
     revalidatePath("/dashboard");
   }
   return result;
@@ -111,6 +113,7 @@ export async function unassignEpo(
   );
   if (result.ok) {
     invalidateLiveSourcesCache();
+    broadcastChanged();
     revalidatePath("/dashboard");
   }
   return result;
@@ -148,6 +151,7 @@ export async function setDetailLevel(
   );
   if (result.ok) {
     invalidateLiveSourcesCache();
+    broadcastChanged();
     revalidatePath("/dashboard");
   }
   return result;
@@ -195,6 +199,7 @@ export async function createTravelLeg(
   );
   if (result.ok) {
     invalidateLiveSourcesCache();
+    broadcastChanged();
     revalidatePath("/dashboard");
   }
   return result;
@@ -246,6 +251,7 @@ export async function updateTravelLeg(
   );
   if (result.ok) {
     invalidateLiveSourcesCache();
+    broadcastChanged();
     revalidatePath("/dashboard");
   }
   return result;
@@ -278,6 +284,7 @@ export async function deleteTravelLeg(
   );
   if (result.ok) {
     invalidateLiveSourcesCache();
+    broadcastChanged();
     revalidatePath("/dashboard");
   }
   return result;
