@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { assertNotPast, PastDateWriteError } from "@/lib/access-control";
-import { invalidateLiveSourcesCache } from "@/lib/snapshot/live-cache";
+import { invalidateLiveSourcesCache, fetchAllLiveSourcesCached } from "@/lib/snapshot/live-cache";
 import { broadcastChanged } from "@/lib/sse/hub";
 import { revalidatePath } from "next/cache";
 import type { DetailLevel, ScheduleEntry } from "@/types/schedule";
