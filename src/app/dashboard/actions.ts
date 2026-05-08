@@ -283,6 +283,36 @@ export async function _setDetailLevelWithNotifyForTest(
   }, factory) as Promise<SetDetailLevelWithNotifyResult>;
 }
 
+export async function setDetailLevelWithNotify(
+  date: string,
+  level: DetailLevel,
+  notify: boolean
+): Promise<SetDetailLevelWithNotifyResult> {
+  const factory = async () =>
+    (await createClient()) as unknown as SupabaseLike;
+  const result = await _setDetailLevelWithNotifyForTest(
+    date,
+    level,
+    notify,
+    factory,
+    new Date(),
+    {
+      sendEmail,
+      loadSchedule: async (_supabase, today) => {
+        const supabase = await createClient();
+        const sources = await fetchAllLiveSourcesCached(supabase, today);
+        return sources.schedule;
+      },
+      appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "",
+    }
+  );
+  if (result.ok) {
+    invalidateLiveSourcesCache();
+    revalidatePath("/dashboard");
+  }
+  return result;
+}
+
 // ---- travel-leg actions ----
 
 type TravelAction = "Pick up" | "Drop off";
