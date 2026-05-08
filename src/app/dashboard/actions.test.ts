@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   _assignEpoForTest,
   _setDetailLevelForTest,
+  _setDetailLevelWithNotifyForTest,
   _unassignEpoForTest,
   _createTravelLegForTest,
   _updateTravelLegForTest,
@@ -245,5 +246,314 @@ describe("travel-leg guards", () => {
       action: "Pick up",
       created_by: "mgr-uuid",
     });
+  });
+});
+
+import type { ScheduleEntry } from "@/types/schedule";
+import { EmailNotConfiguredError } from "@/lib/email/resend";
+
+const sampleEntry: ScheduleEntry = {
+  date: "2026-04-28",
+  dayOfWeek: "Tuesday",
+  confirmationStatus: "confirmed",
+  teakNight: false,
+  activity: "Site visit",
+  location: "Reno, NV",
+  coPilot: "",
+  flightInfo: "",
+  departure: { airport: "KVNY", fbo: "Signature", time: "08:30" },
+  arrival: { airport: "KRNO", fbo: "Atlantic", time: "10:15" },
+  internationalPax: "",
+  groundTransport: "",
+  lodging: "",
+  comments: "",
+  rowId: "row-1",
+};
+
+interface NotifyMockState {
+  upsertedRows: Record<string, unknown>[];
+  selectedDates: string[];
+  previousLevel: string | null;
+  actorRow: { id: string; full_name: string; email: string } | null;
+  otherManagers: { id: string; full_name: string; email: string }[];
+}
+
+function makeNotifyFactory(state: NotifyMockState) {
+  return () => ({
+    auth: { getUser: async () => ({ data: { user: { id: "mgr-uuid" } } }) },
+    from: (table: string) => {
+      if (table === "date_settings") {
+        return {
+          insert: async () => ({ error: null }),
+          upsert: async (row: Record<string, unknown>) => {
+            state.upsertedRows.push(row);
+            return { error: null };
+          },
+          select: () => ({
+            eq: (_col: string, val: string) => ({
+              maybeSingle: async () => {
+                state.selectedDates.push(val);
+                return state.previousLevel
+                  ? { data: { detail_level: state.previousLevel }, error: null }
+                  : { data: null, error: null };
+              },
+            }),
+          }),
+        };
+      }
+      if (table === "profiles") {
+        return {
+          select: () => ({
+            eq: (col1: string, val1: string) => {
+              if (col1 === "id") {
+                return {
+                  maybeSingle: async () =>
+                    state.actorRow
+                      ? { data: state.actorRow, error: null }
+                      : { data: null, error: null },
+                };
+              }
+              return {
+                neq: (_col2: string, _val2: string) => ({
+                  data: state.otherManagers,
+                  error: null,
+                }),
+              };
+            },
+          }),
+        };
+      }
+      throw new Error(`unexpected table: ${table}`);
+    },
+  });
+}
+
+describe("setDetailLevelWithNotify", () => {
+  const originalTz = process.env.APP_TIMEZONE;
+  afterEach(() => {
+    if (originalTz === undefined) delete process.env.APP_TIMEZONE;
+    else process.env.APP_TIMEZONE = originalTz;
+  });
+
+  test("notify=false saves without sending email", async () => {
+    process.env.APP_TIMEZONE = "America/Los_Angeles";
+    const now = new Date("2026-04-28T15:00:00Z");
+    const state: NotifyMockState = {
+      upsertedRows: [],
+      selectedDates: [],
+      previousLevel: "single",
+      actorRow: null,
+      otherManagers: [],
+    };
+    let sendCalls = 0;
+    const result = await _setDetailLevelWithNotifyForTest(
+      "2026-04-28",
+      "dual",
+      false,
+      makeNotifyFactory(state),
+      now,
+      {
+        sendEmail: async () => {
+          sendCalls++;
+        },
+        loadSchedule: async () => [sampleEntry],
+        appUrl: "https://test.example",
+      }
+    );
+    expect(result).toEqual({ ok: true });
+    expect(state.upsertedRows.length).toBe(1);
+    expect(sendCalls).toBe(0);
+  });
+
+  test("notify=true sends one email per other manager", async () => {
+    process.env.APP_TIMEZONE = "America/Los_Angeles";
+    const now = new Date("2026-04-28T15:00:00Z");
+    const state: NotifyMockState = {
+      upsertedRows: [],
+      selectedDates: [],
+      previousLevel: "single",
+      actorRow: { id: "mgr-uuid", full_name: "Jane Manager", email: "jane@x" },
+      otherManagers: [
+        { id: "m2", full_name: "Bob", email: "bob@x" },
+        { id: "m3", full_name: "Carol", email: "carol@x" },
+      ],
+    };
+    const sentTo: string[] = [];
+    const result = await _setDetailLevelWithNotifyForTest(
+      "2026-04-28",
+      "dual",
+      true,
+      makeNotifyFactory(state),
+      now,
+      {
+        sendEmail: async (args) => {
+          sentTo.push(args.to);
+        },
+        loadSchedule: async () => [sampleEntry],
+        appUrl: "https://test.example",
+      }
+    );
+    expect(result).toEqual({ ok: true });
+    expect(sentTo.sort()).toEqual(["bob@x", "carol@x"]);
+  });
+
+  test("save failure short-circuits before email", async () => {
+    process.env.APP_TIMEZONE = "America/Los_Angeles";
+    const now = new Date("2026-04-28T15:00:00Z");
+    let sendCalls = 0;
+    const factory = () => ({
+      auth: {
+        getUser: async () => ({ data: { user: { id: "mgr-uuid" } } }),
+      },
+      from: (table: string) => {
+        if (table === "date_settings") {
+          return {
+            insert: async () => ({ error: null }),
+            upsert: async () => ({ error: { message: "db down" } }),
+            select: () => ({
+              eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
+            }),
+          };
+        }
+        throw new Error(`unexpected table: ${table}`);
+      },
+    });
+    const result = await _setDetailLevelWithNotifyForTest(
+      "2026-04-28",
+      "dual",
+      true,
+      factory,
+      now,
+      {
+        sendEmail: async () => {
+          sendCalls++;
+        },
+        loadSchedule: async () => [sampleEntry],
+        appUrl: "https://test.example",
+      }
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toBe("db down");
+    expect(sendCalls).toBe(0);
+  });
+
+  test("email send failure does not roll back save", async () => {
+    process.env.APP_TIMEZONE = "America/Los_Angeles";
+    const now = new Date("2026-04-28T15:00:00Z");
+    const state: NotifyMockState = {
+      upsertedRows: [],
+      selectedDates: [],
+      previousLevel: "none",
+      actorRow: { id: "mgr-uuid", full_name: "Jane", email: "jane@x" },
+      otherManagers: [
+        { id: "m2", full_name: "Bob", email: "bob@x" },
+        { id: "m3", full_name: "Carol", email: "carol@x" },
+      ],
+    };
+    const result = await _setDetailLevelWithNotifyForTest(
+      "2026-04-28",
+      "single",
+      true,
+      makeNotifyFactory(state),
+      now,
+      {
+        sendEmail: async (args) => {
+          if (args.to === "carol@x") throw new Error("smtp 500");
+        },
+        loadSchedule: async () => [sampleEntry],
+        appUrl: "https://test.example",
+      }
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.emailError).toBe("Some notifications failed (1 of 2)");
+    }
+    expect(state.upsertedRows.length).toBe(1);
+  });
+
+  test("missing email config returns 'Email not configured'", async () => {
+    process.env.APP_TIMEZONE = "America/Los_Angeles";
+    const now = new Date("2026-04-28T15:00:00Z");
+    const state: NotifyMockState = {
+      upsertedRows: [],
+      selectedDates: [],
+      previousLevel: "single",
+      actorRow: { id: "mgr-uuid", full_name: "Jane", email: "jane@x" },
+      otherManagers: [{ id: "m2", full_name: "Bob", email: "bob@x" }],
+    };
+    const result = await _setDetailLevelWithNotifyForTest(
+      "2026-04-28",
+      "dual",
+      true,
+      makeNotifyFactory(state),
+      now,
+      {
+        sendEmail: async () => {
+          throw new EmailNotConfiguredError();
+        },
+        loadSchedule: async () => [sampleEntry],
+        appUrl: "https://test.example",
+      }
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.emailError).toBe("Email not configured");
+  });
+
+  test("no other managers — save succeeds, no email attempt", async () => {
+    process.env.APP_TIMEZONE = "America/Los_Angeles";
+    const now = new Date("2026-04-28T15:00:00Z");
+    const state: NotifyMockState = {
+      upsertedRows: [],
+      selectedDates: [],
+      previousLevel: "single",
+      actorRow: { id: "mgr-uuid", full_name: "Jane", email: "jane@x" },
+      otherManagers: [],
+    };
+    let sendCalls = 0;
+    const result = await _setDetailLevelWithNotifyForTest(
+      "2026-04-28",
+      "dual",
+      true,
+      makeNotifyFactory(state),
+      now,
+      {
+        sendEmail: async () => {
+          sendCalls++;
+        },
+        loadSchedule: async () => [sampleEntry],
+        appUrl: "https://test.example",
+      }
+    );
+    expect(result).toEqual({ ok: true });
+    expect(sendCalls).toBe(0);
+  });
+
+  test("missing schedule entry still sends with null entry", async () => {
+    process.env.APP_TIMEZONE = "America/Los_Angeles";
+    const now = new Date("2026-04-28T15:00:00Z");
+    const state: NotifyMockState = {
+      upsertedRows: [],
+      selectedDates: [],
+      previousLevel: "single",
+      actorRow: { id: "mgr-uuid", full_name: "Jane", email: "jane@x" },
+      otherManagers: [{ id: "m2", full_name: "Bob", email: "bob@x" }],
+    };
+    let sentSubject = "";
+    const result = await _setDetailLevelWithNotifyForTest(
+      "2026-04-28",
+      "dual",
+      true,
+      makeNotifyFactory(state),
+      now,
+      {
+        sendEmail: async (args) => {
+          sentSubject = args.subject;
+        },
+        loadSchedule: async () => [], // no entry for this date
+        appUrl: "https://test.example",
+      }
+    );
+    expect(result).toEqual({ ok: true });
+    expect(sentSubject).toContain("2026-04-28");
   });
 });
