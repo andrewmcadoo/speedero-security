@@ -304,7 +304,7 @@ function makeNotifyFactory(state: NotifyMockState) {
       if (table === "profiles") {
         return {
           select: () => ({
-            eq: (col1: string, val1: string) => {
+            eq: (col1: string, _val1: string) => {
               if (col1 === "id") {
                 return {
                   maybeSingle: async () =>
