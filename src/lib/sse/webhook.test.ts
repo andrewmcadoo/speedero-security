@@ -42,3 +42,27 @@ describe("verifyHmac", () => {
     expect(verifyHmac("hello", "abcd", SECRET)).toBe(false);
   });
 });
+
+import { processSheetChange } from "./webhook";
+
+describe("processSheetChange — invariants", () => {
+  test("calls invalidate before broadcast (order-sensitive)", () => {
+    const calls: string[] = [];
+    processSheetChange({
+      invalidate: () => calls.push("invalidate"),
+      broadcast: () => calls.push("broadcast"),
+    });
+    expect(calls).toEqual(["invalidate", "broadcast"]);
+  });
+
+  test("calls each dependency exactly once", () => {
+    let invalidateCalls = 0;
+    let broadcastCalls = 0;
+    processSheetChange({
+      invalidate: () => invalidateCalls++,
+      broadcast: () => broadcastCalls++,
+    });
+    expect(invalidateCalls).toBe(1);
+    expect(broadcastCalls).toBe(1);
+  });
+});

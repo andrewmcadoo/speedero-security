@@ -27,3 +27,13 @@ export function verifyHmac(
   const expected = Buffer.from(expectedHex, "hex");
   return timingSafeEqual(received, expected);
 }
+
+export function processSheetChange(deps: {
+  invalidate: () => void;
+  broadcast: () => void;
+}): void {
+  // Order matters: invalidating after the broadcast lets a racing
+  // router.refresh() re-render against the still-cached stale value.
+  deps.invalidate();
+  deps.broadcast();
+}
