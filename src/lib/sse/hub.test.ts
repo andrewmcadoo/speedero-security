@@ -66,3 +66,40 @@ describe("hub — subscribe / broadcast", () => {
     expect(_statsForTest().count).toBe(1);
   });
 });
+
+describe("hub — debounce", () => {
+  test("leading edge fires immediately on first call", () => {
+    const r = makeRecorder();
+    subscribe(r.subscriber);
+    broadcastChanged();
+    expect(r.received.length).toBe(1);
+  });
+
+  test("burst of 30 within window produces exactly 2 broadcasts (leading + trailing)", async () => {
+    const r = makeRecorder();
+    subscribe(r.subscriber);
+    for (let i = 0; i < 30; i++) {
+      broadcastChanged();
+    }
+    expect(r.received.length).toBe(1); // only leading edge has fired so far
+    await new Promise((res) => setTimeout(res, 500)); // > DEBOUNCE_MS (400)
+    expect(r.received.length).toBe(2);
+  });
+
+  test("single call after window → only one broadcast (no spurious trailing)", async () => {
+    const r = makeRecorder();
+    subscribe(r.subscriber);
+    broadcastChanged();
+    await new Promise((res) => setTimeout(res, 500));
+    expect(r.received.length).toBe(1);
+  });
+
+  test("two calls separated by > DEBOUNCE_MS produce 2 broadcasts (no debounce)", async () => {
+    const r = makeRecorder();
+    subscribe(r.subscriber);
+    broadcastChanged();
+    await new Promise((res) => setTimeout(res, 500));
+    broadcastChanged();
+    expect(r.received.length).toBe(2);
+  });
+});
