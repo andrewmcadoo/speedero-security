@@ -135,11 +135,9 @@ export function buildDetailChangeEmail(args: {
 - Body includes the changed-by name, formatted date, old and new level, schedule entry fields (destination / location / time / status), and a `{appUrl}/dashboard?date={date}` deep link.
 - If `scheduleEntry` is null, the schedule block reads "No schedule entry for this date."
 
-### Modified: `src/lib/supabase/queries.ts`
+### Not modified: `src/lib/supabase/queries.ts`
 
-- Adds `getOtherManagerEmails(supabase, actorUserId): Promise<{ id: string; email: string; fullName: string }[]>` — selects from `profiles` where `role = 'management'` and `id <> actorUserId`.
-- Adds `getProfileById(supabase, userId): Promise<{ fullName: string } | null>` if not already present (used to fetch the actor's name for the email).
-- Adds `getScheduleEntryForDate(supabase, date): Promise<ScheduleEntry | null>` (or reuses the equivalent if already present — verify during implementation).
+The action reads `profiles` directly via the supabase client (matching the existing `_setDetailLevelForTest` pattern), so no new query helpers are introduced. If a second caller appears later, lifting the queries into `queries.ts` is straightforward.
 
 ## Email content
 
@@ -220,7 +218,7 @@ Plus one read from the existing config (or new if not present):
 
 ## Open items for implementation
 
-- `src/lib/supabase/queries.ts` exposes `getProfile` (current user only). The new action will need either `getProfileById(supabase, userId)` or an inline select; the plan adds a small helper.
-- Schedule entries come from `fetchAllLiveSourcesCached(supabase, today).schedule`, not a dedicated query. The action filters that array to `date`. Cache hits keep this cheap.
+- The action reads the actor's name and other managers' emails inline against `profiles`. No new query helpers are needed.
+- Schedule entries come from `fetchAllLiveSourcesCached(supabase, today).schedule`, filtered to `date`. Cache hits keep this cheap.
 - `ScheduleEntry` field names verified against `src/types/schedule.ts` (see Email content section).
 - Confirm sender domain verification status with Resend before first send.
