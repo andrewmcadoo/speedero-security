@@ -5,7 +5,10 @@ import { assertNotPast, PastDateWriteError } from "@/lib/access-control";
 import { invalidateLiveSourcesCache } from "@/lib/snapshot/live-cache";
 import { broadcastChanged } from "@/lib/sse/hub";
 import { revalidatePath } from "next/cache";
-import type { DetailLevel } from "@/types/schedule";
+import type { DetailLevel, ScheduleEntry } from "@/types/schedule";
+import { buildDetailChangeEmail } from "@/lib/email/detail-change-notification";
+import { sendEmail, EmailNotConfiguredError, type SendEmailArgs } from "@/lib/email/resend";
+import { getAnchorDates } from "@/lib/schedule-utils";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -16,10 +19,16 @@ export type ActionResult = { ok: true } | { ok: false; error: string };
 type SupabaseLike = {
   auth: { getUser: () => Promise<{ data: { user: { id: string } | null } }> };
   from: (table: string) => {
-    insert: (row: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
+    insert?: (row: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
     delete?: () => unknown;
     update?: (row: Record<string, unknown>) => unknown;
     upsert?: (row: Record<string, unknown>, opts?: unknown) => Promise<{ error: { message: string } | null }>;
+    select?: (columns?: string) => {
+      eq: (col: string, val: string) => {
+        maybeSingle?: () => Promise<{ data: unknown; error: { message: string } | null }>;
+        neq?: (col2: string, val2: string) => Promise<{ data: unknown; error: { message: string } | null }> | { data: unknown; error: { message: string } | null };
+      };
+    };
   };
 };
 
@@ -54,7 +63,7 @@ export async function _assignEpoForTest(
   now: Date
 ): Promise<ActionResult> {
   return withGuard(date, now, async (supabase, userId) => {
-    const { error } = await supabase.from("assignments").insert({
+    const { error } = await supabase.from("assignments").insert!({
       date,
       epo_id: epoId,
       assigned_by: userId,
@@ -157,6 +166,123 @@ export async function setDetailLevel(
   return result;
 }
 
+// ---- setDetailLevelWithNotify ----
+
+export interface SetDetailLevelWithNotifyDeps {
+  sendEmail: (args: SendEmailArgs) => Promise<void>;
+  loadSchedule: (supabase: SupabaseLike, today: string) => Promise<ScheduleEntry[]>;
+  appUrl: string;
+}
+
+type SetDetailLevelWithNotifyResult =
+  | { ok: true; emailError?: string }
+  | { ok: false; error: string };
+
+export async function _setDetailLevelWithNotifyForTest(
+  date: string,
+  level: DetailLevel,
+  notify: boolean,
+  factory: SupabaseFactory,
+  now: Date,
+  deps: SetDetailLevelWithNotifyDeps
+): Promise<SetDetailLevelWithNotifyResult> {
+  return withGuard(date, now, async (supabase, userId): Promise<SetDetailLevelWithNotifyResult> => {
+    // Read previous detail level so the email can show old → new.
+    const previousLevelRow = await supabase
+      .from("date_settings")
+      .select?.("detail_level")
+      .eq("date", date)
+      .maybeSingle?.();
+    const previousLevel: DetailLevel = (() => {
+      const data = previousLevelRow?.data as { detail_level?: DetailLevel } | null;
+      return data?.detail_level ?? "none";
+    })();
+
+    // Save (same as setDetailLevel).
+    const upsertResult = await supabase.from("date_settings").upsert!(
+      {
+        date,
+        detail_level: level,
+        updated_by: userId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "date" }
+    );
+    if (upsertResult.error) return { ok: false, error: upsertResult.error.message };
+
+    if (!notify) return { ok: true };
+
+    // Look up actor name and other managers.
+    const actorRow = await supabase
+      .from("profiles")
+      .select?.("id, full_name, email")
+      .eq("id", userId)
+      .maybeSingle?.();
+    const actorName =
+      ((actorRow?.data as { full_name?: string | null } | null)?.full_name ?? "")
+        .trim() || "A manager";
+
+    const othersResp = await supabase
+      .from("profiles")
+      .select?.("id, full_name, email")
+      .eq("role", "management")
+      .neq?.("id", userId);
+    const others =
+      (othersResp && "data" in othersResp ? othersResp.data : null) as
+        | { id: string; full_name: string | null; email: string }[]
+        | null;
+    const recipients = others ?? [];
+    if (recipients.length === 0) return { ok: true };
+
+    // Find the schedule entry for this date.
+    const { today } = getAnchorDates(now);
+    let scheduleEntry: ScheduleEntry | null = null;
+    try {
+      const schedule = await deps.loadSchedule(supabase, today);
+      scheduleEntry = schedule.find((s) => s.date === date) ?? null;
+    } catch (err) {
+      console.error("loadSchedule failed for detail-change email:", err);
+      scheduleEntry = null;
+    }
+
+    const email = buildDetailChangeEmail({
+      date,
+      oldLevel: previousLevel,
+      newLevel: level,
+      scheduleEntry,
+      changedByName: actorName,
+      appUrl: deps.appUrl,
+    });
+
+    const settled = await Promise.allSettled(
+      recipients.map((r) =>
+        deps.sendEmail({
+          to: r.email,
+          subject: email.subject,
+          html: email.html,
+          text: email.text,
+        })
+      )
+    );
+
+    const failed = settled.filter((s) => s.status === "rejected");
+    if (failed.length === 0) return { ok: true };
+
+    const firstReason = (failed[0] as PromiseRejectedResult).reason;
+    if (firstReason instanceof EmailNotConfiguredError) {
+      console.error("Resend not configured; detail-change email skipped");
+      return { ok: true, emailError: "Email not configured" };
+    }
+    for (const f of failed) {
+      console.error("detail-change email send failed:", (f as PromiseRejectedResult).reason);
+    }
+    return {
+      ok: true,
+      emailError: `Some notifications failed (${failed.length} of ${recipients.length})`,
+    };
+  }, factory) as Promise<SetDetailLevelWithNotifyResult>;
+}
+
 // ---- travel-leg actions ----
 
 type TravelAction = "Pick up" | "Drop off";
@@ -177,7 +303,7 @@ export async function _createTravelLegForTest(
   now: Date
 ): Promise<ActionResult> {
   return withGuard(date, now, async (supabase, userId) => {
-    const { error } = await supabase.from("travel_legs").insert({
+    const { error } = await supabase.from("travel_legs").insert!({
       date,
       action,
       created_by: userId,
