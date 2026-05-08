@@ -28,7 +28,10 @@ export function SheetChangeListener() {
       }, REFRESH_LOCKOUT_MS);
     };
 
-    const es = new EventSource("/api/changes");
+    // basePath is not auto-prefixed on EventSource; read from env so this
+    // works both on Clipper (basePath="/SecApp") and any other host.
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+    const es = new EventSource(`${basePath}/api/changes`);
     es.addEventListener("changed", runRefresh);
     // Browser handles reconnect with backoff; nothing to do on error.
 
