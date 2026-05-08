@@ -308,6 +308,7 @@ export async function setDetailLevelWithNotify(
   );
   if (result.ok) {
     invalidateLiveSourcesCache();
+    broadcastChanged();
     revalidatePath("/dashboard");
   }
   return result;
