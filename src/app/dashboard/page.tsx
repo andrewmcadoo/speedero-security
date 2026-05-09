@@ -175,7 +175,6 @@ export default async function DashboardPage({
           email: e.email,
         }))}
         profileId={profile.id}
-        userName={profile.fullName}
         todayISO={today}
         tomorrowISO={tomorrow}
         range={range}

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 interface AppHeaderProps {
-  userName: string;
+  userName?: string;
   rightSlot?: React.ReactNode; // sign-out, bug-report, etc.
 }
 
@@ -25,7 +25,7 @@ export function AppHeader({ userName, rightSlot }: AppHeaderProps) {
         </TabLink>
       </nav>
       <div className="flex items-center gap-2 text-sm text-gray-400">
-        <span className="hidden sm:inline">{userName}</span>
+        {userName && <span className="hidden sm:inline">{userName}</span>}
         {rightSlot}
       </div>
     </header>

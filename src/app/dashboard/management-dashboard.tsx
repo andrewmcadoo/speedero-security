@@ -28,7 +28,6 @@ export function ManagementDashboard({
   entries,
   epos,
   profileId,
-  userName,
   todayISO,
   tomorrowISO,
   range,
@@ -36,7 +35,6 @@ export function ManagementDashboard({
   entries: DashboardEntry[];
   epos: { id: string; fullName: string; email: string }[];
   profileId: string;
-  userName: string;
   todayISO: string;
   tomorrowISO: string;
   range: { start: string; end: string };
@@ -122,12 +120,8 @@ export function ManagementDashboard({
         data-chrome-h={chromeHeight || undefined}
         className="sticky top-0 z-30 bg-gray-950 pb-2 pt-[max(1.5rem,env(safe-area-inset-top))]"
       >
-        <div className="mb-2">
-          <h1 className="text-xl font-bold">Speedero Security</h1>
-          <p className="text-sm text-gray-400">Management Dashboard</p>
-        </div>
+        <h1 className="mb-2 text-xl font-bold">Speedero Security</h1>
         <AppHeader
-          userName={userName}
           rightSlot={
             <>
               <Link
@@ -141,7 +135,7 @@ export function ManagementDashboard({
             </>
           }
         />
-        <div>
+        <div className="mt-3">
           <DashboardFilters
             searchQuery={search}
             onSearchChange={setSearch}
