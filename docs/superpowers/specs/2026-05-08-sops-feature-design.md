@@ -19,17 +19,22 @@ Two audiences:
 - Visibility (`shared` vs `management_only`) is enforced by Supabase RLS, not just by the UI.
 - Both PDF and DOCX uploads are accepted; both are viewable in-app as PDF.
 - The list and viewer work on mobile (per the recent dashboard mobile-polish work).
+- Every SOP mutation (upload, replace, metadata edit, visibility change, delete) produces an immutable audit record. Management can search and review the full history. The audit log is append-only — not editable or deletable through the UI or the application's database role.
+- File content is preserved across replacements and deletions so the audit log can answer "what was in force at date X" and "what file replaced what" with the actual document content, not just metadata.
 
 ## Non-Goals
 
 The following are explicitly out of scope for v1. Each can be added later without breaking the schema or storage layout.
 
 - View tracking, acknowledgment, or "unread" badges.
-- Version history / file revisions (replace-in-place only).
-- Categories, tags, folders, or full-text search.
-- Notifications when a new SOP is published.
+- User-facing version picker / "view previous version" UI on the SOP itself. (The audit log preserves content and references; there's just no version-history surface in the SOP viewer.)
+- Categories, tags, folders, or full-text search of SOP content.
+- Notifications when a new SOP is published or audited.
 - Bulk upload, multi-file zip, or in-app DOCX editing.
 - External sharing or non-member access.
+- File diff or rendered comparison between historical versions.
+- Rollback / "restore this version" UI.
+- Audit log export to CSV/PDF for legal discovery.
 
 ## Design Overview
 
@@ -39,8 +44,9 @@ A new top-level route `/SecApp/sops` with:
 - A list view that adapts to role: managers see all SOPs with audience badges and CRUD controls; EPOs see only shared SOPs and can read them.
 - A dedicated viewer page at `/sops/[id]` that renders a PDF in an iframe over a short-lived signed Supabase Storage URL.
 - An upload modal that validates input, uploads the original file, converts DOCX → PDF server-side using LibreOffice headless on Clipper, and inserts a single row.
+- A separate management-only audit page at `/sops/audit` — read-only, filterable by date / actor / action / title, with per-document chronology drill-down.
 
-One Supabase table (`sops`), one Supabase Storage bucket (`sops`), audience enforced by RLS in both Postgres and Storage policies.
+Two Supabase tables (`sops` for current state, `sop_audit_log` for the immutable history), one Supabase Storage bucket (`sops`) whose objects are never deleted by the application. Audience enforced by RLS in both Postgres and Storage policies. Every live mutation and its corresponding audit insert happen atomically inside a single Postgres transaction via RPC functions.
 
 ## Data Model
 
@@ -70,6 +76,17 @@ create index idx_sops_uploaded_at on sops(uploaded_at desc);
 
 When the upload is a PDF, `storage_path_original == storage_path_pdf` (one file in storage). When the upload is a DOCX, two files are stored: the original `.docx` (served as the "Download" button target) and the converted `.pdf` (loaded by the viewer).
 
+### Storage path scheme
+
+Storage paths are versioned per upload so replacements never overwrite, which is what makes the audit log's content-preservation guarantee real:
+
+```
+sops/${sopId}/${uploadSlug}/original.{pdf,docx}
+sops/${sopId}/${uploadSlug}/document.pdf
+```
+
+`uploadSlug` is the upload's timestamp formatted as `YYYYMMDDTHHMMSSZ` (UTC, no colons or hyphens) so the path is URL-safe. The full ISO timestamp is also written to `sops.uploaded_at` for human-readable display; the slug is just the path-safe encoding of the same instant. After a replace, the old folder remains untouched in storage and is referenced by the corresponding `sop_audit_log` row's `superseded_storage_path`. After a delete, the `sops` row is removed but the storage objects stay in place — the `sop_audit_log` `delete` row holds the path.
+
 ### RLS
 
 Reuses the existing `is_management()` helper from migration 001.
@@ -78,9 +95,9 @@ Reuses the existing `is_management()` helper from migration 001.
   - Management: all rows.
   - EPO: rows where `audience = 'shared'`.
 - `sops` INSERT / UPDATE / DELETE: management only.
-- Storage bucket `sops` policies mirror the same checks. Read policies join back to the `sops` table by storage path so audience changes flow through naturally.
+- Storage bucket `sops` policies mirror the same checks for *current* paths. Historical paths (referenced only by the audit log) are readable by management only; EPO read policies match against current `sops` row paths.
 
-Hard delete (no soft delete) — matches the "replace in place, no history" framing.
+The `sops` row is hard-deleted on user delete (no soft-delete column), but storage objects survive — see the audit subsystem section. Audit-table immutability is described in its own section below.
 
 ## UI
 
@@ -130,7 +147,11 @@ Same component, pre-filled. File picker is optional — leaving it empty keeps t
 
 ### Delete (manager only)
 
-Reuses the existing `confirm-dialog.tsx` component. Hard-deletes the row and both storage objects.
+Reuses the existing `confirm-dialog.tsx` component. Hard-deletes the `sops` row. Storage objects are intentionally **not** deleted — they remain referenced by the audit log so the SOP's content can be reconstructed for any past point in time.
+
+### Audit log entry point
+
+The manager's `/sops` list view has a small "Audit log" link in its header that opens `/sops/audit`. EPOs do not see this link; the route also enforces management-only access server-side and redirects EPO sessions to `/sops`.
 
 ## Server Actions and Conversion
 
@@ -140,21 +161,26 @@ All server-side logic lives in `src/app/sops/actions.ts` and `src/lib/sops/conve
 
 1. Auth check — bail if the session is not management.
 2. Parse FormData; validate title non-empty, audience is a valid enum, file MIME is `application/pdf` or the DOCX MIME, file size ≤ 25 MB.
-3. Generate a `sopId` up front. Storage paths are namespaced by it: `sops/${sopId}/original.{pdf,docx}` and `sops/${sopId}/document.pdf`.
-4. Upload the original file to Storage at `sops/${sopId}/original.{ext}`.
+3. Generate a `sopId` and an `uploadSlug` (path-safe UTC timestamp, see Storage Path Scheme). Storage paths: `sops/${sopId}/${uploadSlug}/original.{pdf,docx}` and `sops/${sopId}/${uploadSlug}/document.pdf`.
+4. Upload the original file to Storage at the original path.
 5. If the upload is a PDF: skip conversion. `storage_path_pdf = storage_path_original`.
-6. If the upload is a DOCX: write the buffer to `os.tmpdir()`, invoke `convertDocxToPdf`, upload the resulting PDF to `sops/${sopId}/document.pdf`, clean up temp files.
-7. Insert the `sops` row with both paths, MIME, size, and uploader.
-8. `revalidatePath('/sops')`.
-9. On any failure after a partial storage write, best-effort delete the orphaned storage objects so we don't leak files.
+6. If the upload is a DOCX: write the buffer to `os.tmpdir()`, invoke `convertDocxToPdf`, upload the resulting PDF to the document path, clean up temp files.
+7. Call `record_sop_upload` RPC — atomically inserts the `sops` row and the `upload` audit log row inside one transaction.
+8. `revalidatePath('/sops')` and `revalidatePath('/sops/audit')`.
+9. On any failure before step 7, best-effort delete the just-uploaded storage objects so we don't leak orphans. Failures *after* step 7 leave the row + audit intact (correct outcome — both succeeded together).
 
 ### `updateSop(id, formData)`
 
-Same shape. If the file picker is empty, skip steps 4–6 and only update metadata. If a new file is provided, run the full upload+convert path, update the row, then delete the old storage objects after the row update succeeds.
+Auth check + validation as above. Determine which fields changed (title, description, audience, file).
+
+- If only metadata changed: call `record_sop_update` RPC, which updates the row and inserts the appropriate `edit_metadata` and/or `visibility_change` audit rows in one transaction.
+- If the file changed (with or without metadata changes): run the upload+convert path against a *new* timestamped storage path, then call `record_sop_update` RPC, which updates the row's storage paths and inserts `replace_file` plus any concurrent `edit_metadata` / `visibility_change` rows in one transaction. The previous storage objects are **not** deleted — they remain referenced by the new `replace_file` audit row's `superseded_storage_path`.
+
+One audit row per change type per save (so a title-edit-plus-file-replace produces two audit rows).
 
 ### `deleteSop(id)`
 
-Auth check, delete storage objects, delete the row.
+Auth check. Call `record_sop_delete` RPC, which deletes the `sops` row and inserts a `delete` audit row carrying the storage path that was in force at deletion. Storage objects are not removed.
 
 ### `convertDocxToPdf(input: Buffer): Promise<Buffer>`
 
@@ -173,6 +199,126 @@ LibreOffice is the same engine Google Docs uses for DOCX rendering; fidelity is 
 - **Conversion failure** (corrupt DOCX, soffice crash, timeout): no row inserted, orphaned `original.docx` deleted, modal shows "Couldn't convert this DOCX. Try re-exporting it from Word, or upload a PDF." The manager can retry.
 - **Storage failure mid-flow**: best-effort cleanup, error surfaced.
 
+## Audit Log Subsystem
+
+### Schema (Migration `013_sop_audit_log.sql`)
+
+```sql
+create extension if not exists pg_trgm;
+
+create type sop_audit_action as enum (
+  'upload',
+  'replace_file',
+  'edit_metadata',
+  'visibility_change',
+  'delete'
+);
+
+create table sop_audit_log (
+  id uuid primary key default gen_random_uuid(),
+  occurred_at timestamptz not null default now(),
+  actor_id uuid not null references profiles(id),
+  sop_id uuid not null,                       -- NOT a FK; survives sop row deletion
+  action sop_audit_action not null,
+
+  -- Snapshot at time of action — audit row stands alone after live row is gone.
+  title_at_action text not null,
+  audience_at_action sop_audience not null,
+
+  -- File context — populated for upload, replace_file, delete.
+  new_storage_path text,
+  new_filename text,
+  new_mime_type text,
+  new_file_size_bytes bigint,
+  superseded_storage_path text,               -- replace_file, delete
+  superseded_filename text,
+
+  -- Metadata diffs.
+  prev_title text,                            -- edit_metadata
+  prev_description text,                      -- edit_metadata
+  next_description text,                      -- edit_metadata
+  prev_audience sop_audience                  -- visibility_change
+);
+
+create index idx_sop_audit_sop_id on sop_audit_log(sop_id, occurred_at desc);
+create index idx_sop_audit_occurred_at on sop_audit_log(occurred_at desc);
+create index idx_sop_audit_title_trgm on sop_audit_log using gin (title_at_action gin_trgm_ops);
+```
+
+`sop_id` is intentionally not a foreign key so audit rows survive deletion of the `sops` row they describe.
+
+### Per-action payloads
+
+| Action | Fields populated (besides timestamp / actor / sop_id / action / title / audience snapshot) |
+|---|---|
+| `upload` | `new_storage_path`, `new_filename`, `new_mime_type`, `new_file_size_bytes` |
+| `replace_file` | `new_*` (as above) plus `superseded_storage_path`, `superseded_filename` |
+| `edit_metadata` | `prev_title`, `prev_description`, `next_description` (any combination of title/description deltas; `title_at_action` reflects the post-edit value) |
+| `visibility_change` | `prev_audience`; `audience_at_action` reflects the post-change value |
+| `delete` | `superseded_storage_path`, `superseded_filename` (the file in force at deletion) |
+
+### Immutability — three layers
+
+```sql
+-- 1. RLS: management can SELECT; absence of UPDATE/DELETE policies denies them.
+alter table sop_audit_log enable row level security;
+create policy "Management can read audit log"
+  on sop_audit_log for select using (is_management());
+
+-- 2. Revoke privileges so even direct DB access cannot mutate.
+revoke update, delete on sop_audit_log from anon, authenticated, service_role;
+
+-- 3. Trigger as defense in depth — catches owner-role bypass or future privilege grants.
+create or replace function deny_audit_mutation()
+returns trigger language plpgsql as $$
+begin
+  raise exception 'sop_audit_log is append-only; % blocked', tg_op;
+end;
+$$;
+
+create trigger sop_audit_log_no_update before update on sop_audit_log
+  for each row execute function deny_audit_mutation();
+create trigger sop_audit_log_no_delete before delete on sop_audit_log
+  for each row execute function deny_audit_mutation();
+```
+
+INSERT happens via `security definer` RPC functions invoked from the server actions; the API roles never get direct INSERT either, so there's no path to write a forged audit row through the client.
+
+### RPC functions
+
+`record_sop_upload`, `record_sop_update`, `record_sop_delete` live in the same migration. Each wraps the live mutation and the audit insert in a single PL/pgSQL block, marked `security definer` so they execute with the function-owner's privileges (sufficient to insert into `sop_audit_log` despite the API roles' missing privileges). The functions perform the management-role check internally as a second auth gate.
+
+### Audit UI — `/sops/audit`
+
+Management-only page (server-side redirect for EPO). Read-only.
+
+**Filter bar** (top of page):
+- Date range — start and end date pickers.
+- Action type — multi-select chips (Upload, Replace, Edit metadata, Visibility change, Delete).
+- Title search — substring match against `title_at_action`, backed by the `gin_trgm_ops` index.
+- Actor — dropdown of management users (sourced from `profiles` where `role = 'management'`).
+
+**Results table** (server-paginated, 50 per page):
+
+| Column | Content |
+|---|---|
+| Timestamp | Localized to APP_TIMEZONE (e.g. `May 8, 2026  14:32 PT`) |
+| Actor | Full name; tooltip shows email |
+| Action | Colored badge (`upload` green, `replace_file` blue, `edit_metadata` gray, `visibility_change` amber, `delete` red) |
+| Title at action | Click-through to `/sops/audit?sop_id=X` for that document's chronology |
+| Summary | Human-readable line built from the audit row (see examples below) |
+| File | "Download" button when the row references a storage path; generates a 5-minute signed URL to that historical path |
+
+Summary line examples (built by `buildAuditSummary` in `src/lib/sops/audit.ts`):
+
+- `upload` → `Uploaded procedure-v2.pdf (Shared)`
+- `replace_file` → `Replaced procedure-v1.pdf with procedure-v2.pdf`
+- `edit_metadata` → `Title: "Old Title" → "New Title"; description updated`
+- `visibility_change` → `Audience: Shared → Management only`
+- `delete` → `Deleted procedure-v3.pdf`
+
+**Per-document chronology** is just `/sops/audit?sop_id=X` — the same page filtered by `sop_id`. The query parameter pins the title-search and actor filters open while showing all action types for that document by default.
+
 ## File Layout
 
 Following existing conventions (`src/app/dashboard/`, `src/lib/dashboard/`):
@@ -181,28 +327,35 @@ Following existing conventions (`src/app/dashboard/`, `src/lib/dashboard/`):
 src/app/sops/
   page.tsx                      # list view, role-aware
   [id]/page.tsx                 # viewer
-  actions.ts                    # uploadSop, updateSop, deleteSop
+  audit/page.tsx                # NEW — management-only read-only audit log
+  actions.ts                    # uploadSop, updateSop, deleteSop (call RPCs)
 src/components/
   app-header.tsx                # NEW — shared Dashboard / SOPs tabs
   sops-list.tsx                 # role-driven list
   sop-upload-form.tsx           # form used in modal
   sop-viewer.tsx                # iframe + download button
+  sop-audit-table.tsx           # NEW — paginated audit results
+  sop-audit-filters.tsx         # NEW — filter bar
 src/lib/sops/
   convert.ts                    # convertDocxToPdf
   convert.test.ts
   storage.ts                    # signed URL helpers, path builders
   storage.test.ts
+  audit.ts                      # NEW — buildAuditSummary, filter helpers
+  audit.test.ts                 # NEW
 src/lib/supabase/
-  queries.ts                    # extend with getSops, getSopById
+  queries.ts                    # extend with getSops, getSopById, getSopAuditLog
 supabase/migrations/
   012_sops.sql                  # table + enum + indexes + RLS + storage policies
+  013_sop_audit_log.sql         # audit table + enum + RLS + REVOKE + trigger + RPCs
 ```
 
 ## Testing
 
-- **Unit**: `convert.ts` with `spawn` mocked (covers timeout, non-zero exit, missing output file, success path); storage path builders; query helpers' audience filter logic.
-- **Integration**: `actions.ts` round-trip — upload PDF, edit metadata only, delete. DOCX integration test runs only when `soffice` is available locally; otherwise skips with a clear message.
-- **Access control**: tests that an EPO session cannot SELECT a `management_only` SOP, that the Upload button doesn't render in EPO sessions, and that calling `uploadSop` from an EPO session returns an unauthorized error.
+- **Unit**: `convert.ts` with `spawn` mocked (covers timeout, non-zero exit, missing output file, success path); storage path builders; query helpers' audience filter logic; `buildAuditSummary` for each action type.
+- **Integration**: `actions.ts` round-trip — upload PDF (asserts both `sops` row and `upload` audit row exist), edit metadata only (asserts `edit_metadata` audit row), edit visibility (asserts `visibility_change` row), replace file (asserts `replace_file` row + that previous storage object still exists), delete (asserts `sops` row gone, `delete` audit row exists, storage object still exists). DOCX integration test runs only when `soffice` is available locally; otherwise skips with a clear message.
+- **Access control**: tests that an EPO session cannot SELECT a `management_only` SOP, cannot SELECT any `sop_audit_log` row, the Upload button doesn't render in EPO sessions, calling `uploadSop` from an EPO session returns unauthorized, and `/sops/audit` redirects EPOs.
+- **Immutability**: a database-level test that any direct UPDATE or DELETE against `sop_audit_log` fails — both via the `service_role` REST endpoint (privilege check) and via direct SQL as the table owner (trigger check).
 
 ## Deploy Prerequisites
 
