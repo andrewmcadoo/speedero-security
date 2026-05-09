@@ -1,6 +1,6 @@
 // src/app/sops/actions.test.ts
 import { afterEach, describe, expect, test } from "bun:test";
-import { _uploadSopForTest } from "./actions";
+import { _uploadSopForTest, _updateSopForTest } from "./actions";
 
 function makeFormData(file: File, fields: Record<string, string>) {
   const fd = new FormData();
@@ -133,5 +133,134 @@ describe("_uploadSopForTest", () => {
     expect(result.ok).toBe(false);
     expect(stub.calls.uploadPaths).toHaveLength(1);
     expect(stub.calls.removedPaths).toEqual(stub.calls.uploadPaths);
+  });
+});
+
+function makeUpdateStub(opts: {
+  user?: { id: string } | null;
+  currentSop?: {
+    id: string;
+    storage_path_pdf: string;
+    storage_path_original: string;
+    original_filename: string;
+    original_mime_type: string;
+  } | null;
+  rpcResult?: { error: { message: string } | null };
+} = {}) {
+  const calls = {
+    rpc: [] as { name: string; args: Record<string, unknown> }[],
+    uploadPaths: [] as string[],
+  };
+  return {
+    calls,
+    client: {
+      auth: {
+        getUser: async () => ({ data: { user: opts.user !== undefined ? opts.user : { id: "mgr-1" } } }),
+      },
+      from: (_table: string) => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: async () => ({
+              data: opts.currentSop ?? null,
+              error: null,
+            }),
+          }),
+        }),
+      }),
+      rpc: async (name: string, args: Record<string, unknown>) => {
+        calls.rpc.push({ name, args });
+        return opts.rpcResult ?? { error: null };
+      },
+      storage: {
+        from: () => ({
+          upload: async (path: string) => {
+            calls.uploadPaths.push(path);
+            return { error: null };
+          },
+          remove: async () => ({ error: null }),
+        }),
+      },
+    },
+  };
+}
+
+describe("_updateSopForTest", () => {
+  test("metadata-only update calls record_sop_update without uploading", async () => {
+    const stub = makeUpdateStub({
+      currentSop: {
+        id: "sop-1",
+        storage_path_pdf: "sop-1/old/document.pdf",
+        storage_path_original: "sop-1/old/original.pdf",
+        original_filename: "old.pdf",
+        original_mime_type: "application/pdf",
+      },
+    });
+    const fd = new FormData();
+    fd.append("title", "New Title");
+    fd.append("description", "Now described");
+    fd.append("audience", "shared");
+    // No file
+
+    const result = await _updateSopForTest(
+      "sop-1",
+      fd,
+      () => stub.client,
+      new Date("2026-05-08T14:32:11Z")
+    );
+
+    expect(result.ok).toBe(true);
+    expect(stub.calls.uploadPaths).toEqual([]);
+    expect(stub.calls.rpc).toHaveLength(1);
+    expect(stub.calls.rpc[0].name).toBe("record_sop_update");
+    expect(stub.calls.rpc[0].args.p_new_storage_path_pdf).toBeNull();
+  });
+
+  test("file replacement uploads to new slug and passes storage args to RPC", async () => {
+    const stub = makeUpdateStub({
+      currentSop: {
+        id: "sop-1",
+        storage_path_pdf: "sop-1/old/document.pdf",
+        storage_path_original: "sop-1/old/original.pdf",
+        original_filename: "old.pdf",
+        original_mime_type: "application/pdf",
+      },
+    });
+    const fd = new FormData();
+    fd.append("title", "New Title");
+    fd.append("description", "");
+    fd.append("audience", "shared");
+    fd.append("file", pdfFile("new.pdf", 512));
+
+    const result = await _updateSopForTest(
+      "sop-1",
+      fd,
+      () => stub.client,
+      new Date("2026-05-08T14:32:11Z")
+    );
+
+    expect(result.ok).toBe(true);
+    expect(stub.calls.uploadPaths).toHaveLength(1);
+    expect(stub.calls.uploadPaths[0]).toMatch(
+      /^sop-1\/20260508T143211Z\/original\.pdf$/
+    );
+    expect(stub.calls.rpc[0].args.p_new_storage_path_pdf).toBe(
+      stub.calls.uploadPaths[0]
+    );
+  });
+
+  test("rejects when SOP does not exist", async () => {
+    const stub = makeUpdateStub({ currentSop: null });
+    const fd = new FormData();
+    fd.append("title", "T");
+    fd.append("description", "");
+    fd.append("audience", "shared");
+
+    const result = await _updateSopForTest(
+      "missing",
+      fd,
+      () => stub.client,
+      new Date("2026-05-08T14:32:11Z")
+    );
+    expect(result.ok).toBe(false);
   });
 });
