@@ -127,7 +127,6 @@ function SopRow({
   onEdit?: (s: Sop) => void;
   onDelete?: (s: Sop) => void;
 }) {
-  const filePill = sop.originalMimeType.includes("pdf") ? "PDF" : "DOCX";
   const updated = new Date(sop.updatedAt).toLocaleDateString();
   return (
     <li className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -135,9 +134,6 @@ function SopRow({
         <div className="flex items-center gap-2">
           <span className="truncate font-medium text-gray-100 group-hover:text-blue-300">
             {sop.title}
-          </span>
-          <span className="rounded bg-gray-800 px-1.5 py-0.5 text-[10px] font-medium uppercase text-gray-300">
-            {filePill}
           </span>
           {isManagement && (
             <span
