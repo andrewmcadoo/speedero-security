@@ -153,7 +153,6 @@ export function EpoDashboard({
           </p>
         </div>
         <AppHeader
-          userName={userName}
           rightSlot={
             <>
               <ReportBugButton />
