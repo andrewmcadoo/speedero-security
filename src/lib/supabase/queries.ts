@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CardSnapshot, DashboardEntry, Profile } from "@/types/schedule";
+import type {
+  Sop,
+  SopAudience,
+  SopAuditLogEntryWithActor,
+} from "@/types/sops";
 
 interface ProfileRow {
   id: string;
@@ -187,4 +192,184 @@ export async function upsertSnapshot(
     return false;
   }
   return true;
+}
+
+// ---- SOPs ----
+
+interface SopRow {
+  id: string;
+  title: string;
+  description: string | null;
+  audience: SopAudience;
+  storage_path_pdf: string;
+  storage_path_original: string;
+  original_filename: string;
+  original_mime_type: string;
+  file_size_bytes: number;
+  uploaded_by: string;
+  uploaded_at: string;
+  updated_at: string;
+}
+
+function toSop(row: SopRow): Sop {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    audience: row.audience,
+    storagePathPdf: row.storage_path_pdf,
+    storagePathOriginal: row.storage_path_original,
+    originalFilename: row.original_filename,
+    originalMimeType: row.original_mime_type,
+    fileSizeBytes: row.file_size_bytes,
+    uploadedBy: row.uploaded_by,
+    uploadedAt: row.uploaded_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * Returns SOPs visible to the caller's session — RLS handles the audience
+ * filter. EPO sessions get only `shared` rows; management gets everything.
+ */
+export async function getSops(supabase: SupabaseClient): Promise<Sop[]> {
+  const { data, error } = await supabase
+    .from("sops")
+    .select("*")
+    .order("uploaded_at", { ascending: false });
+  if (error) {
+    console.error("getSops failed:", error.message);
+    return [];
+  }
+  return (data ?? []).map((r) => toSop(r as SopRow));
+}
+
+export async function getSopById(
+  supabase: SupabaseClient,
+  id: string
+): Promise<Sop | null> {
+  const { data, error } = await supabase
+    .from("sops")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) {
+    console.error("getSopById failed:", error.message);
+    return null;
+  }
+  return data ? toSop(data as SopRow) : null;
+}
+
+// ---- SOP audit log ----
+
+interface AuditRow {
+  id: string;
+  occurred_at: string;
+  actor_id: string;
+  sop_id: string;
+  action: SopAuditLogEntryWithActor["action"];
+  title_at_action: string;
+  audience_at_action: SopAudience;
+  new_storage_path: string | null;
+  new_filename: string | null;
+  new_mime_type: string | null;
+  new_file_size_bytes: number | null;
+  superseded_storage_path: string | null;
+  superseded_filename: string | null;
+  prev_title: string | null;
+  prev_description: string | null;
+  next_description: string | null;
+  prev_audience: SopAudience | null;
+  actor: { full_name: string | null; email: string } | null;
+}
+
+function toAudit(row: AuditRow): SopAuditLogEntryWithActor {
+  return {
+    id: row.id,
+    occurredAt: row.occurred_at,
+    actorId: row.actor_id,
+    sopId: row.sop_id,
+    action: row.action,
+    titleAtAction: row.title_at_action,
+    audienceAtAction: row.audience_at_action,
+    newStoragePath: row.new_storage_path,
+    newFilename: row.new_filename,
+    newMimeType: row.new_mime_type,
+    newFileSizeBytes: row.new_file_size_bytes,
+    supersededStoragePath: row.superseded_storage_path,
+    supersededFilename: row.superseded_filename,
+    prevTitle: row.prev_title,
+    prevDescription: row.prev_description,
+    nextDescription: row.next_description,
+    prevAudience: row.prev_audience,
+    actorFullName: row.actor?.full_name ?? "",
+    actorEmail: row.actor?.email ?? "",
+  };
+}
+
+export interface AuditFilters {
+  sopId?: string;
+  actorId?: string;
+  actions?: SopAuditLogEntryWithActor["action"][];
+  titleQuery?: string;
+  startDate?: string; // YYYY-MM-DD inclusive
+  endDate?: string;   // YYYY-MM-DD inclusive
+  limit?: number;
+  offset?: number;
+}
+
+export async function getSopAuditLog(
+  supabase: SupabaseClient,
+  filters: AuditFilters = {}
+): Promise<{ entries: SopAuditLogEntryWithActor[]; totalCount: number }> {
+  const limit = filters.limit ?? 50;
+  const offset = filters.offset ?? 0;
+
+  let query = supabase
+    .from("sop_audit_log")
+    .select(
+      "*, actor:actor_id(full_name, email)",
+      { count: "exact" }
+    )
+    .order("occurred_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (filters.sopId) query = query.eq("sop_id", filters.sopId);
+  if (filters.actorId) query = query.eq("actor_id", filters.actorId);
+  if (filters.actions && filters.actions.length > 0) {
+    query = query.in("action", filters.actions);
+  }
+  if (filters.titleQuery) {
+    // pg_trgm-backed substring match (% is the SQL LIKE wildcard)
+    query = query.ilike("title_at_action", `%${filters.titleQuery}%`);
+  }
+  if (filters.startDate) {
+    query = query.gte("occurred_at", `${filters.startDate}T00:00:00Z`);
+  }
+  if (filters.endDate) {
+    query = query.lte("occurred_at", `${filters.endDate}T23:59:59Z`);
+  }
+
+  const { data, error, count } = await query;
+  if (error) {
+    console.error("getSopAuditLog failed:", error.message);
+    return { entries: [], totalCount: 0 };
+  }
+  return {
+    entries: (data ?? []).map((r) => toAudit(r as AuditRow)),
+    totalCount: count ?? 0,
+  };
+}
+
+export async function listManagementProfiles(supabase: SupabaseClient) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, email")
+    .eq("role", "management")
+    .order("full_name");
+  if (error) {
+    console.error("listManagementProfiles failed:", error.message);
+    return [];
+  }
+  return data ?? [];
 }
