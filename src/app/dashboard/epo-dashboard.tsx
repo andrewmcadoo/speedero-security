@@ -161,7 +161,7 @@ export function EpoDashboard({
             </>
           }
         />
-        <div>
+        <div className="mt-3">
           <DashboardFilters
             searchQuery={search}
             onSearchChange={setSearch}
