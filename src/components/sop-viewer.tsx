@@ -1,13 +1,13 @@
 // src/components/sop-viewer.tsx
 "use client";
 
+import Link from "next/link";
+
 interface SopViewerProps {
   pdfUrl: string;
-  downloadUrl: string;
-  downloadFilename: string;
 }
 
-export function SopViewer({ pdfUrl, downloadUrl, downloadFilename }: SopViewerProps) {
+export function SopViewer({ pdfUrl }: SopViewerProps) {
   return (
     <div className="flex flex-col">
       <div className="aspect-[3/4] w-full sm:aspect-auto sm:h-[80vh]">
@@ -18,13 +18,12 @@ export function SopViewer({ pdfUrl, downloadUrl, downloadFilename }: SopViewerPr
         />
       </div>
       <div className="mt-3 flex justify-end">
-        <a
-          href={downloadUrl}
-          download={downloadFilename}
-          className="rounded-md bg-blue-700 px-4 py-2 text-sm font-medium text-blue-50 hover:bg-blue-600"
+        <Link
+          href="/sops"
+          className="rounded-md bg-gray-800 px-4 py-2 text-sm font-medium text-gray-100 hover:bg-gray-700"
         >
-          Download original
-        </a>
+          Close
+        </Link>
       </div>
     </div>
   );

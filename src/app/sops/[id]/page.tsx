@@ -20,11 +20,8 @@ export default async function SopViewerPage({
   const sop = await getSopById(supabase, id);
   if (!sop) notFound();
 
-  const [pdfUrl, downloadUrl] = await Promise.all([
-    createSignedSopUrl(supabase, sop.storagePathPdf),
-    createSignedSopUrl(supabase, sop.storagePathOriginal),
-  ]);
-  if (!pdfUrl || !downloadUrl) notFound();
+  const pdfUrl = await createSignedSopUrl(supabase, sop.storagePathPdf);
+  if (!pdfUrl) notFound();
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
@@ -52,11 +49,7 @@ export default async function SopViewerPage({
             <p className="text-sm text-gray-300">{sop.description}</p>
           )}
         </header>
-        <SopViewer
-          pdfUrl={pdfUrl}
-          downloadUrl={downloadUrl}
-          downloadFilename={sop.originalFilename}
-        />
+        <SopViewer pdfUrl={pdfUrl} />
       </div>
     </div>
   );
