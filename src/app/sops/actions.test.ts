@@ -1,6 +1,6 @@
 // src/app/sops/actions.test.ts
 import { afterEach, describe, expect, test } from "bun:test";
-import { _uploadSopForTest, _updateSopForTest } from "./actions";
+import { _uploadSopForTest, _updateSopForTest, _deleteSopForTest } from "./actions";
 
 function makeFormData(file: File, fields: Record<string, string>) {
   const fd = new FormData();
@@ -261,6 +261,51 @@ describe("_updateSopForTest", () => {
       () => stub.client,
       new Date("2026-05-08T14:32:11Z")
     );
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe("_deleteSopForTest", () => {
+  test("calls record_sop_delete RPC without removing storage objects", async () => {
+    const calls = {
+      rpc: [] as { name: string; args: Record<string, unknown> }[],
+      removedPaths: [] as string[],
+    };
+    const client = {
+      auth: {
+        getUser: async () => ({ data: { user: { id: "mgr-1" } } }),
+      },
+      rpc: async (name: string, args: Record<string, unknown>) => {
+        calls.rpc.push({ name, args });
+        return { error: null };
+      },
+      storage: {
+        from: () => ({
+          remove: async (paths: string[]) => {
+            calls.removedPaths.push(...paths);
+            return { error: null };
+          },
+        }),
+      },
+    };
+    const result = await _deleteSopForTest("sop-1", () => client);
+    expect(result.ok).toBe(true);
+    expect(calls.rpc).toHaveLength(1);
+    expect(calls.rpc[0].name).toBe("record_sop_delete");
+    expect(calls.rpc[0].args).toEqual({
+      p_sop_id: "sop-1",
+      p_actor_id: "mgr-1",
+    });
+    expect(calls.removedPaths).toEqual([]);
+  });
+
+  test("returns the RPC error when the delete fails", async () => {
+    const client = {
+      auth: { getUser: async () => ({ data: { user: { id: "mgr-1" } } }) },
+      rpc: async () => ({ error: { message: "nope" } }),
+      storage: { from: () => ({ remove: async () => ({ error: null }) }) },
+    };
+    const result = await _deleteSopForTest("sop-1", () => client);
     expect(result.ok).toBe(false);
   });
 });

@@ -281,3 +281,35 @@ export async function updateSop(
   }
   return result;
 }
+
+export async function _deleteSopForTest(
+  id: string,
+  factory: Factory
+): Promise<ActionResult> {
+  const supabase = await factory();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Not signed in" };
+
+  const rpc = await supabase.rpc("record_sop_delete", {
+    p_sop_id: id,
+    p_actor_id: user.id,
+  });
+  if (rpc.error) {
+    return { ok: false, error: `Delete failed: ${rpc.error.message}` };
+  }
+  return { ok: true };
+}
+
+export async function deleteSop(id: string): Promise<ActionResult> {
+  const result = await _deleteSopForTest(
+    id,
+    async () => (await createClient()) as unknown as SupabaseLike
+  );
+  if (result.ok) {
+    revalidatePath("/sops");
+    revalidatePath("/sops/audit");
+  }
+  return result;
+}
