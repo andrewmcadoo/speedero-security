@@ -32,22 +32,52 @@ export function SopUploadForm({
   onCancel,
   onSubmit,
 }: SopUploadFormProps) {
+  const allowMultiple = mode === "create";
+
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [audience, setAudience] = useState<SopAudience>(initial?.audience ?? "shared");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!open) return null;
 
-  const fileType: "pdf" | "docx" | null = selectedFile
-    ? selectedFile.type === DOCX_MIME
-      ? "docx"
-      : "pdf"
-    : null;
+  const isBatch = files.length > 1;
+  const singleFileType: "pdf" | "docx" | null =
+    files.length === 1 ? (files[0].type === DOCX_MIME ? "docx" : "pdf") : null;
+  const anyDocx = files.some((f) => f.type === DOCX_MIME);
 
-  function clearFile() {
-    setSelectedFile(null);
+  function addFiles(picked: FileList | null) {
+    if (!picked || picked.length === 0) return;
+    const next: File[] = [];
+    const seen = new Set(files.map((f) => `${f.name}:${f.size}`));
+    for (const f of Array.from(picked)) {
+      if (f.size > MAX_SOP_FILE_BYTES) {
+        setError(`"${f.name}" exceeds the 25 MB limit`);
+        continue;
+      }
+      if (f.type !== PDF_MIME && f.type !== DOCX_MIME) {
+        setError(`"${f.name}" is not a PDF or DOCX`);
+        continue;
+      }
+      const key = `${f.name}:${f.size}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      next.push(f);
+    }
+    if (next.length === 0) return;
+    setError(null);
+    setFiles(allowMultiple ? [...files, ...next] : next.slice(0, 1));
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function removeFile(idx: number) {
+    setFiles(files.filter((_, i) => i !== idx));
+  }
+
+  function clearAll() {
+    setFiles([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -63,78 +93,143 @@ export function SopUploadForm({
       <form
         action={(fd) => {
           setError(null);
+          if (mode === "create" && files.length === 0) {
+            setError("Add at least one file");
+            return;
+          }
+
+          const titleInput = (fd.get("title")?.toString() ?? "").trim();
+          const description = (fd.get("description")?.toString() ?? "").trim();
+
           startTransition(async () => {
-            const res = await onSubmit(fd);
-            if (!res.ok) setError(res.error);
-            else onCancel();
+            // Edit mode: keep existing single-file behavior.
+            if (mode === "edit") {
+              const fdEdit = new FormData();
+              fdEdit.append("title", titleInput);
+              fdEdit.append("description", description);
+              fdEdit.append("audience", audience);
+              if (files[0]) fdEdit.append("file", files[0]);
+              const res = await onSubmit(fdEdit);
+              if (!res.ok) setError(res.error);
+              else onCancel();
+              return;
+            }
+
+            // Create mode: one onSubmit call per file. Title/description
+            // only apply when a single file is being uploaded; for batches
+            // each SOP gets its title auto-derived server-side.
+            setProgress({ done: 0, total: files.length });
+            for (let i = 0; i < files.length; i++) {
+              const file = files[i];
+              const perFile = new FormData();
+              perFile.append("title", isBatch ? "" : titleInput);
+              perFile.append("description", isBatch ? "" : description);
+              perFile.append("audience", audience);
+              perFile.append("file", file);
+              const res = await onSubmit(perFile);
+              if (!res.ok) {
+                setError(`Failed on "${file.name}": ${res.error}`);
+                setProgress(null);
+                return;
+              }
+              setProgress({ done: i + 1, total: files.length });
+            }
+            setProgress(null);
+            onCancel();
           });
         }}
         className="w-full max-w-md rounded-xl bg-gray-900 p-5 shadow-xl"
       >
         <h2 className="text-base font-semibold text-gray-100">
-          {mode === "create" ? "Upload SOP" : "Edit SOP"}
+          {mode === "create" ? "Upload SOPs" : "Edit SOP"}
         </h2>
 
         <input
           ref={fileInputRef}
           type="file"
-          name="file"
           accept={`${PDF_MIME},${DOCX_MIME},.pdf,.docx`}
-          required={mode === "create"}
+          multiple={allowMultiple}
           className="sr-only"
-          onChange={(e) => {
-            const f = e.target.files?.[0] ?? null;
-            if (!f) {
-              setSelectedFile(null);
-              return;
-            }
-            if (f.size > MAX_SOP_FILE_BYTES) {
-              setError("File exceeds 25 MB limit");
-              e.target.value = "";
-              setSelectedFile(null);
-              return;
-            }
-            setError(null);
-            setSelectedFile(f);
-          }}
+          onChange={(e) => addFiles(e.target.files)}
         />
 
-        <div className="mt-4">
-          {selectedFile ? (
-            <FileChip file={selectedFile} onRemove={clearFile} />
-          ) : (
+        <div className="mt-4 space-y-2">
+          {files.length > 0 && (
+            <ul className="max-h-56 space-y-2 overflow-y-auto pr-0.5">
+              {files.map((f, i) => (
+                <li key={`${f.name}:${f.size}:${i}`}>
+                  <FileChip file={f} onRemove={() => removeFile(i)} />
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-gray-700 bg-gray-950 px-4 py-5 text-sm text-gray-300 hover:border-gray-600 hover:bg-gray-900"
+          >
+            <span className="font-medium">
+              {files.length === 0
+                ? mode === "edit"
+                  ? "Replace file (optional)"
+                  : "Choose files"
+                : allowMultiple
+                ? "Add more files"
+                : "Replace file"}
+            </span>
+            <span className="text-xs text-gray-500">
+              {allowMultiple
+                ? "PDF or DOCX, up to 25 MB each — pick multiple"
+                : "PDF or DOCX, max 25 MB"}
+            </span>
+          </button>
+
+          {files.length > 1 && (
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-gray-700 bg-gray-950 px-4 py-6 text-sm text-gray-300 hover:border-gray-600 hover:bg-gray-900"
+              onClick={clearAll}
+              className="text-xs text-gray-500 hover:text-gray-300"
             >
-              <span className="font-medium">
-                {mode === "edit" ? "Replace file (optional)" : "Choose a file"}
-              </span>
-              <span className="text-xs text-gray-500">PDF or DOCX, max 25 MB</span>
+              Remove all
             </button>
           )}
         </div>
 
-        <label className="mt-4 block text-sm text-gray-300">
-          Title
-          <input
-            name="title"
-            defaultValue={initial?.title ?? ""}
-            placeholder={selectedFile ? deriveBaseName(selectedFile.name) : "Defaults to file name"}
-            className="mt-1 w-full rounded-md border border-gray-800 bg-gray-950 px-3 py-2 text-gray-100 placeholder:text-gray-600"
-          />
-        </label>
+        {!isBatch && (
+          <>
+            <label className="mt-4 block text-sm text-gray-300">
+              Title
+              <input
+                name="title"
+                defaultValue={initial?.title ?? ""}
+                placeholder={
+                  files[0]
+                    ? deriveBaseName(files[0].name)
+                    : "Defaults to file name"
+                }
+                className="mt-1 w-full rounded-md border border-gray-800 bg-gray-950 px-3 py-2 text-gray-100 placeholder:text-gray-600"
+              />
+            </label>
 
-        <label className="mt-3 block text-sm text-gray-300">
-          Description <span className="text-xs text-gray-600">(optional)</span>
-          <textarea
-            name="description"
-            rows={2}
-            defaultValue={initial?.description ?? ""}
-            className="mt-1 w-full rounded-md border border-gray-800 bg-gray-950 px-3 py-2 text-gray-100"
-          />
-        </label>
+            <label className="mt-3 block text-sm text-gray-300">
+              Description <span className="text-xs text-gray-600">(optional)</span>
+              <textarea
+                name="description"
+                rows={2}
+                defaultValue={initial?.description ?? ""}
+                className="mt-1 w-full rounded-md border border-gray-800 bg-gray-950 px-3 py-2 text-gray-100"
+              />
+            </label>
+          </>
+        )}
+
+        {isBatch && (
+          <p className="mt-4 rounded-md border border-gray-800 bg-gray-950 px-3 py-2 text-xs text-gray-400">
+            Each SOP&apos;s title will default to its file name. Edit individual
+            SOPs after upload to customize.
+          </p>
+        )}
 
         <div className="mt-4">
           <p className="mb-1 text-sm text-gray-300">Audience</p>
@@ -173,15 +268,19 @@ export function SopUploadForm({
           </button>
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || (mode === "create" && files.length === 0)}
             className="flex-1 rounded-lg bg-blue-700 py-2.5 text-sm font-medium text-blue-50 hover:bg-blue-600 disabled:bg-blue-900 disabled:text-blue-300"
           >
             {pending
-              ? fileType === "docx"
+              ? progress && progress.total > 1
+                ? `Uploading ${progress.done + 1}/${progress.total}…`
+                : (singleFileType === "docx" || (isBatch && anyDocx))
                 ? "Converting…"
                 : "Saving…"
               : mode === "create"
-              ? "Upload"
+              ? files.length > 1
+                ? `Upload ${files.length} SOPs`
+                : "Upload"
               : "Save changes"}
           </button>
         </div>
@@ -193,7 +292,7 @@ export function SopUploadForm({
 function FileChip({ file, onRemove }: { file: File; onRemove: () => void }) {
   const isDocx = file.type === DOCX_MIME;
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-gray-800 bg-gray-950 px-3 py-3">
+    <div className="flex items-center gap-3 rounded-lg border border-gray-800 bg-gray-950 px-3 py-2.5">
       <div
         className={
           isDocx
