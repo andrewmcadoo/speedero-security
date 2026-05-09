@@ -5,9 +5,9 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import {
-  buildOriginalPath,
-  buildPdfPath,
+  buildSopFilePath,
   buildUploadSlug,
+  deriveBaseName,
   SOPS_BUCKET,
 } from "@/lib/sops/storage";
 import {
@@ -47,8 +47,7 @@ export async function _uploadSopForTest(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Not signed in" };
 
-  const title = (formData.get("title")?.toString() ?? "").trim();
-  if (!title) return { ok: false, error: "Title is required" };
+  const titleInput = (formData.get("title")?.toString() ?? "").trim();
 
   const description = (formData.get("description")?.toString() ?? "").trim() || null;
 
@@ -63,10 +62,14 @@ export async function _uploadSopForTest(
   const fileType = fileTypeFromMime(file.type);
   if (!fileType) return { ok: false, error: "Only PDF and DOCX files are supported" };
 
+  const baseName = deriveBaseName(file.name);
+  const title = titleInput || baseName;
+
   const sopId = randomUUID();
   const slug = buildUploadSlug(now);
-  const originalPath = buildOriginalPath(sopId, slug, fileType);
-  const pdfPath = fileType === "pdf" ? originalPath : buildPdfPath(sopId, slug);
+  const version = 1; // first upload for this sop
+  const originalPath = buildSopFilePath(sopId, slug, baseName, version, fileType);
+  const pdfPath = fileType === "pdf" ? originalPath : buildSopFilePath(sopId, slug, baseName, version, "pdf");
 
   const originalBytes = Buffer.from(await file.arrayBuffer());
   const uploaded: string[] = [];
@@ -133,6 +136,15 @@ export async function _uploadSopForTest(
   }
 }
 
+async function getNextVersion(supabase: SupabaseLike, sopId: string): Promise<number> {
+  const { count } = await supabase
+    .from("sop_audit_log")
+    .select("*", { count: "exact", head: true })
+    .eq("sop_id", sopId)
+    .in("action", ["upload", "replace_file"]);
+  return (count ?? 0) + 1;
+}
+
 async function rollback(supabase: SupabaseLike, paths: string[]): Promise<void> {
   if (paths.length === 0) return;
   try {
@@ -167,18 +179,17 @@ export async function _updateSopForTest(
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Not signed in" };
 
-  const title = (formData.get("title")?.toString() ?? "").trim();
-  if (!title) return { ok: false, error: "Title is required" };
+  const titleInput = (formData.get("title")?.toString() ?? "").trim();
   const description = (formData.get("description")?.toString() ?? "").trim() || null;
   const audience = parseAudience(formData.get("audience"));
   if (!audience) return { ok: false, error: "Audience is required" };
 
   // Look up the current row so we can preserve its storage paths if no
-  // new file was uploaded.
+  // new file was uploaded, and fall back to its title if blank.
   const currentResp = await supabase
     .from("sops")
     .select(
-      "id, storage_path_pdf, storage_path_original, original_filename, original_mime_type"
+      "id, title, storage_path_pdf, storage_path_original, original_filename, original_mime_type"
     )
     .eq("id", id)
     .maybeSingle();
@@ -192,6 +203,7 @@ export async function _updateSopForTest(
   let newFilename: string | null = null;
   let newMime: string | null = null;
   let newSize: number | null = null;
+  let fileBaseName: string | null = null;
   const uploaded: string[] = [];
 
   if (file instanceof File && file.size > 0) {
@@ -201,9 +213,13 @@ export async function _updateSopForTest(
     const fileType = fileTypeFromMime(file.type);
     if (!fileType) return { ok: false, error: "Only PDF and DOCX files are supported" };
 
+    fileBaseName = deriveBaseName(file.name);
     const slug = buildUploadSlug(now);
-    newOriginalPath = buildOriginalPath(id, slug, fileType);
-    newPdfPath = fileType === "pdf" ? newOriginalPath : buildPdfPath(id, slug);
+    const version = await getNextVersion(supabase, id);
+    newOriginalPath = buildSopFilePath(id, slug, fileBaseName, version, fileType);
+    newPdfPath = fileType === "pdf"
+      ? newOriginalPath
+      : buildSopFilePath(id, slug, fileBaseName, version, "pdf");
     newFilename = file.name;
     newMime = file.type;
     newSize = file.size;
@@ -243,6 +259,9 @@ export async function _updateSopForTest(
       uploaded.push(newPdfPath);
     }
   }
+
+  const title = titleInput || fileBaseName || currentResp.data.title;
+  if (!title) return { ok: false, error: "Title is required" };
 
   const rpc = await supabase.rpc("record_sop_update", {
     p_sop_id: id,

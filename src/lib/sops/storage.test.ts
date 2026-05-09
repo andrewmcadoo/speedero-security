@@ -2,8 +2,8 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildUploadSlug,
-  buildOriginalPath,
-  buildPdfPath,
+  buildSopFilePath,
+  deriveBaseName,
   SOPS_BUCKET,
 } from "./storage";
 
@@ -27,20 +27,35 @@ describe("buildUploadSlug", () => {
   });
 });
 
-describe("buildOriginalPath / buildPdfPath", () => {
-  test("original path includes sop id, slug, and extension", () => {
-    expect(buildOriginalPath("abc-123", "20260508T143211Z", "docx")).toBe(
-      "abc-123/20260508T143211Z/original.docx"
+describe("buildSopFilePath", () => {
+  test("path is sopId/slug/basename-v{N}.{ext}", () => {
+    expect(buildSopFilePath("abc-123", "20260508T143211Z", "procedure", 1, "pdf")).toBe(
+      "abc-123/20260508T143211Z/procedure-v1.pdf"
     );
-    expect(buildOriginalPath("abc-123", "20260508T143211Z", "pdf")).toBe(
-      "abc-123/20260508T143211Z/original.pdf"
+    expect(buildSopFilePath("abc-123", "20260508T143211Z", "procedure", 3, "docx")).toBe(
+      "abc-123/20260508T143211Z/procedure-v3.docx"
     );
   });
+});
 
-  test("pdf path always uses document.pdf", () => {
-    expect(buildPdfPath("abc-123", "20260508T143211Z")).toBe(
-      "abc-123/20260508T143211Z/document.pdf"
-    );
+describe("deriveBaseName", () => {
+  test("strips the extension", () => {
+    expect(deriveBaseName("procedure.pdf")).toBe("procedure");
+    expect(deriveBaseName("manual.docx")).toBe("manual");
+  });
+
+  test("collapses whitespace and slashes into dashes", () => {
+    expect(deriveBaseName("My SOP File.pdf")).toBe("My-SOP-File");
+    expect(deriveBaseName("a/b/c.pdf")).toBe("a-b-c");
+  });
+
+  test("empty result falls back to 'untitled'", () => {
+    expect(deriveBaseName(".pdf")).toBe("untitled");
+    expect(deriveBaseName("")).toBe("untitled");
+  });
+
+  test("preserves filenames without an extension", () => {
+    expect(deriveBaseName("README")).toBe("README");
   });
 });
 

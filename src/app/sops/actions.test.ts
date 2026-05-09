@@ -65,15 +65,16 @@ describe("_uploadSopForTest", () => {
     expect(stub.calls.rpc).toEqual([]);
   });
 
-  test("rejects when title is missing", async () => {
+  test("blank title falls back to file basename", async () => {
     const stub = makeStubSupabase();
     const result = await _uploadSopForTest(
-      makeFormData(pdfFile(), { title: "  ", audience: "shared" }),
+      makeFormData(pdfFile("Boarding Procedure.pdf"), { title: "  ", audience: "shared" }),
       () => stub.client,
       new Date("2026-05-08T14:32:11Z")
     );
-    expect(result.ok).toBe(false);
-    expect(stub.calls.uploadPaths).toEqual([]);
+    expect(result.ok).toBe(true);
+    expect(stub.calls.rpc).toHaveLength(1);
+    expect(stub.calls.rpc[0].args.p_title).toBe("Boarding-Procedure");
   });
 
   test("rejects unsupported file types", async () => {
@@ -110,7 +111,7 @@ describe("_uploadSopForTest", () => {
     expect(result.ok).toBe(true);
     expect(stub.calls.uploadPaths).toHaveLength(1);
     expect(stub.calls.uploadPaths[0]).toMatch(
-      /^[0-9a-f-]+\/20260508T143211Z\/original\.pdf$/
+      /^[0-9a-f-]+\/20260508T143211Z\/ops-v1\.pdf$/
     );
     expect(stub.calls.rpc).toHaveLength(1);
     expect(stub.calls.rpc[0].name).toBe("record_sop_upload");
@@ -140,12 +141,14 @@ function makeUpdateStub(opts: {
   user?: { id: string } | null;
   currentSop?: {
     id: string;
+    title?: string;
     storage_path_pdf: string;
     storage_path_original: string;
     original_filename: string;
     original_mime_type: string;
   } | null;
   rpcResult?: { error: { message: string } | null };
+  auditCount?: number;
 } = {}) {
   const calls = {
     rpc: [] as { name: string; args: Record<string, unknown> }[],
@@ -157,16 +160,27 @@ function makeUpdateStub(opts: {
       auth: {
         getUser: async () => ({ data: { user: opts.user !== undefined ? opts.user : { id: "mgr-1" } } }),
       },
-      from: (_table: string) => ({
-        select: () => ({
-          eq: () => ({
-            maybeSingle: async () => ({
-              data: opts.currentSop ?? null,
-              error: null,
+      from: (table: string) => {
+        if (table === "sop_audit_log") {
+          return {
+            select: () => ({
+              eq: () => ({
+                in: async () => ({ count: opts.auditCount ?? 0, error: null }),
+              }),
+            }),
+          };
+        }
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () => ({
+                data: opts.currentSop ?? null,
+                error: null,
+              }),
             }),
           }),
-        }),
-      }),
+        };
+      },
       rpc: async (name: string, args: Record<string, unknown>) => {
         calls.rpc.push({ name, args });
         return opts.rpcResult ?? { error: null };
@@ -215,15 +229,17 @@ describe("_updateSopForTest", () => {
     expect(stub.calls.rpc[0].args.p_new_storage_path_pdf).toBeNull();
   });
 
-  test("file replacement uploads to new slug and passes storage args to RPC", async () => {
+  test("file replacement: path uses new file basename and next version", async () => {
     const stub = makeUpdateStub({
       currentSop: {
         id: "sop-1",
-        storage_path_pdf: "sop-1/old/document.pdf",
-        storage_path_original: "sop-1/old/original.pdf",
+        title: "Existing",
+        storage_path_pdf: "sop-1/old/old-v1.pdf",
+        storage_path_original: "sop-1/old/old-v1.pdf",
         original_filename: "old.pdf",
         original_mime_type: "application/pdf",
       },
+      auditCount: 1, // one prior upload → next version is 2
     });
     const fd = new FormData();
     fd.append("title", "New Title");
@@ -240,8 +256,8 @@ describe("_updateSopForTest", () => {
 
     expect(result.ok).toBe(true);
     expect(stub.calls.uploadPaths).toHaveLength(1);
-    expect(stub.calls.uploadPaths[0]).toMatch(
-      /^sop-1\/20260508T143211Z\/original\.pdf$/
+    expect(stub.calls.uploadPaths[0]).toBe(
+      "sop-1/20260508T143211Z/new-v2.pdf"
     );
     expect(stub.calls.rpc[0].args.p_new_storage_path_pdf).toBe(
       stub.calls.uploadPaths[0]

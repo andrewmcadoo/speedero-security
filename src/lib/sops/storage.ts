@@ -24,16 +24,26 @@ export function buildUploadSlug(date: Date): string {
   );
 }
 
-export function buildOriginalPath(
-  sopId: string,
-  uploadSlug: string,
-  ext: "pdf" | "docx"
-): string {
-  return `${sopId}/${uploadSlug}/original.${ext}`;
+/**
+ * Strip the extension from a filename and sanitize it for use as a
+ * storage path component. Whitespace and `/`/`\\` become `-`; other
+ * unusual chars are kept (Supabase Storage paths support most chars).
+ * Empty result falls back to "untitled".
+ */
+export function deriveBaseName(filename: string): string {
+  const noExt = filename.replace(/\.[^./\\]+$/, "");
+  const safe = noExt.replace(/[\s/\\]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return safe || "untitled";
 }
 
-export function buildPdfPath(sopId: string, uploadSlug: string): string {
-  return `${sopId}/${uploadSlug}/document.pdf`;
+export function buildSopFilePath(
+  sopId: string,
+  uploadSlug: string,
+  baseName: string,
+  version: number,
+  ext: "pdf" | "docx"
+): string {
+  return `${sopId}/${uploadSlug}/${baseName}-v${version}.${ext}`;
 }
 
 export const SIGNED_URL_TTL_SECONDS = 5 * 60; // 5 minutes

@@ -53,11 +53,11 @@ export function SopUploadForm({
         </h2>
 
         <label className="mt-4 block text-sm text-gray-300">
-          Title
+          Title <span className="text-xs text-gray-500">(optional — defaults to file name)</span>
           <input
             name="title"
-            required
             defaultValue={initial?.title ?? ""}
+            placeholder="Defaults to uploaded file name"
             className="mt-1 w-full rounded-md border border-gray-800 bg-gray-950 px-3 py-2 text-gray-100"
           />
         </label>
