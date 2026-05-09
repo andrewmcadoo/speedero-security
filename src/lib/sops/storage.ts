@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 // src/lib/sops/storage.ts
 // Pure helpers for SOP storage paths. No Supabase imports — these run on
 // the server (in actions) and are also safe to import from tests.
@@ -33,4 +34,20 @@ export function buildOriginalPath(
 
 export function buildPdfPath(sopId: string, uploadSlug: string): string {
   return `${sopId}/${uploadSlug}/document.pdf`;
+}
+
+export const SIGNED_URL_TTL_SECONDS = 5 * 60; // 5 minutes
+
+export async function createSignedSopUrl(
+  supabase: SupabaseClient,
+  path: string
+): Promise<string | null> {
+  const { data, error } = await supabase.storage
+    .from(SOPS_BUCKET)
+    .createSignedUrl(path, SIGNED_URL_TTL_SECONDS);
+  if (error || !data) {
+    console.error("createSignedSopUrl failed:", error?.message);
+    return null;
+  }
+  return data.signedUrl;
 }
