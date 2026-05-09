@@ -18,6 +18,7 @@ import {
   useTodayAnchor,
 } from "@/lib/hooks/use-today-anchor";
 import { TodayBanner } from "@/components/today-banner";
+import { AppHeader } from "@/components/app-header";
 
 // Hysteresis above current chrome bottom — must exceed the chrome's growth
 // when the banner appears (~36px) so the reveal doesn't shift today back into
@@ -145,18 +146,21 @@ export function EpoDashboard({
         data-chrome-h={chromeHeight || undefined}
         className="sticky top-0 z-30 bg-gray-950 pb-2 pt-[max(1.5rem,env(safe-area-inset-top))]"
       >
-        <header className="mb-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold">Speedero Security</h1>
-            <p className="text-sm text-gray-400">
-              {firstName ? `${firstName}'s Assignment Schedule` : "Assignment Schedule"}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <ReportBugButton />
-            <SignOutButton />
-          </div>
-        </header>
+        <div className="mb-2">
+          <h1 className="text-xl font-bold">Speedero Security</h1>
+          <p className="text-sm text-gray-400">
+            {firstName ? `${firstName}'s Assignment Schedule` : "Assignment Schedule"}
+          </p>
+        </div>
+        <AppHeader
+          userName={userName}
+          rightSlot={
+            <>
+              <ReportBugButton />
+              <SignOutButton />
+            </>
+          }
+        />
         <div>
           <DashboardFilters
             searchQuery={search}

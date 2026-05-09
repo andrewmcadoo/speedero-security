@@ -19,6 +19,7 @@ import {
 } from "@/lib/hooks/use-today-anchor";
 import { TodayBanner } from "@/components/today-banner";
 import Link from "next/link";
+import { AppHeader } from "@/components/app-header";
 
 const HIDE_BUFFER = 36;
 const FALLBACK_CHROME = 128;
@@ -27,6 +28,7 @@ export function ManagementDashboard({
   entries,
   epos,
   profileId,
+  userName,
   todayISO,
   tomorrowISO,
   range,
@@ -34,6 +36,7 @@ export function ManagementDashboard({
   entries: DashboardEntry[];
   epos: { id: string; fullName: string; email: string }[];
   profileId: string;
+  userName: string;
   todayISO: string;
   tomorrowISO: string;
   range: { start: string; end: string };
@@ -119,22 +122,25 @@ export function ManagementDashboard({
         data-chrome-h={chromeHeight || undefined}
         className="sticky top-0 z-30 bg-gray-950 pb-2 pt-[max(1.5rem,env(safe-area-inset-top))]"
       >
-        <header className="mb-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold">Speedero Security</h1>
-            <p className="text-sm text-gray-400">Management Dashboard</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Link
-              href="/admin/users"
-              className="rounded-md px-3 py-1.5 text-xs text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-200"
-            >
-              Manage Users
-            </Link>
-            <ReportBugButton />
-            <SignOutButton />
-          </div>
-        </header>
+        <div className="mb-2">
+          <h1 className="text-xl font-bold">Speedero Security</h1>
+          <p className="text-sm text-gray-400">Management Dashboard</p>
+        </div>
+        <AppHeader
+          userName={userName}
+          rightSlot={
+            <>
+              <Link
+                href="/admin/users"
+                className="rounded-md px-3 py-1.5 text-xs text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-200"
+              >
+                Manage Users
+              </Link>
+              <ReportBugButton />
+              <SignOutButton />
+            </>
+          }
+        />
         <div>
           <DashboardFilters
             searchQuery={search}
