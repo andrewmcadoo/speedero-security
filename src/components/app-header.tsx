@@ -15,7 +15,7 @@ export function AppHeader({ userName, rightSlot }: AppHeaderProps) {
   const onSops = pathname.startsWith("/sops");
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-gray-800 bg-gray-950/95 px-3 py-2 backdrop-blur">
+    <header className="sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-gray-800 bg-gray-950/95 py-2 pr-3 backdrop-blur">
       <nav className="flex items-center gap-1">
         <TabLink href="/dashboard" active={onDashboard}>
           Dashboard
