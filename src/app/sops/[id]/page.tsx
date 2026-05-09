@@ -28,7 +28,9 @@ export default async function SopViewerPage({
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
-      <AppHeader userName={profile.fullName} />
+      <AppHeader
+        userName={profile.role === "management" ? undefined : profile.fullName}
+      />
       <div className="space-y-3 p-3">
         <header className="flex flex-col gap-1">
           <h1 className="text-lg font-semibold text-gray-100">{sop.title}</h1>

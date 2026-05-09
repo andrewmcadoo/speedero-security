@@ -31,7 +31,9 @@ export default async function SopsPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
-      <AppHeader userName={profile.fullName} />
+      <AppHeader
+        userName={profile.role === "management" ? undefined : profile.fullName}
+      />
       <SopsPageClient
         sops={sops}
         isManagement={profile.role === "management"}

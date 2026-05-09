@@ -85,7 +85,7 @@ export default async function SopAuditPage({
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
-      <AppHeader userName={profile.fullName} />
+      <AppHeader />
       <div className="space-y-3 p-3">
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-semibold text-gray-100">SOP Audit Log</h1>
