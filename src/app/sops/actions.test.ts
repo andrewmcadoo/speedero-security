@@ -1,0 +1,137 @@
+// src/app/sops/actions.test.ts
+import { afterEach, describe, expect, test } from "bun:test";
+import { _uploadSopForTest } from "./actions";
+
+function makeFormData(file: File, fields: Record<string, string>) {
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+  fd.append("file", file);
+  return fd;
+}
+
+function pdfFile(name = "ops.pdf", size = 1024) {
+  return new File([new Uint8Array(size)], name, { type: "application/pdf" });
+}
+
+function makeStubSupabase(opts: {
+  user?: { id: string } | null;
+  rpcResult?: { error: { message: string } | null };
+  uploadResult?: { error: { message: string } | null };
+  removeResult?: { error: { message: string } | null };
+} = {}) {
+  const calls = {
+    rpc: [] as { name: string; args: Record<string, unknown> }[],
+    uploadPaths: [] as string[],
+    removedPaths: [] as string[],
+  };
+  return {
+    calls,
+    client: {
+      auth: {
+        getUser: async () => ({
+          data: { user: opts.user !== undefined ? opts.user : { id: "mgr-1" } },
+        }),
+      },
+      rpc: async (name: string, args: Record<string, unknown>) => {
+        calls.rpc.push({ name, args });
+        return opts.rpcResult ?? { error: null };
+      },
+      storage: {
+        from: () => ({
+          upload: async (path: string) => {
+            calls.uploadPaths.push(path);
+            return opts.uploadResult ?? { error: null };
+          },
+          remove: async (paths: string[]) => {
+            calls.removedPaths.push(...paths);
+            return opts.removeResult ?? { error: null };
+          },
+        }),
+      },
+    },
+  };
+}
+
+describe("_uploadSopForTest", () => {
+  test("rejects unauthenticated callers", async () => {
+    const stub = makeStubSupabase({ user: null });
+    const result = await _uploadSopForTest(
+      makeFormData(pdfFile(), { title: "T", audience: "shared" }),
+      () => stub.client,
+      new Date("2026-05-08T14:32:11Z")
+    );
+    expect(result.ok).toBe(false);
+    expect(stub.calls.uploadPaths).toEqual([]);
+    expect(stub.calls.rpc).toEqual([]);
+  });
+
+  test("rejects when title is missing", async () => {
+    const stub = makeStubSupabase();
+    const result = await _uploadSopForTest(
+      makeFormData(pdfFile(), { title: "  ", audience: "shared" }),
+      () => stub.client,
+      new Date("2026-05-08T14:32:11Z")
+    );
+    expect(result.ok).toBe(false);
+    expect(stub.calls.uploadPaths).toEqual([]);
+  });
+
+  test("rejects unsupported file types", async () => {
+    const stub = makeStubSupabase();
+    const txt = new File(["x"], "notes.txt", { type: "text/plain" });
+    const result = await _uploadSopForTest(
+      makeFormData(txt, { title: "T", audience: "shared" }),
+      () => stub.client,
+      new Date("2026-05-08T14:32:11Z")
+    );
+    expect(result.ok).toBe(false);
+    expect(stub.calls.uploadPaths).toEqual([]);
+  });
+
+  test("rejects oversize files", async () => {
+    const stub = makeStubSupabase();
+    const big = pdfFile("big.pdf", 26 * 1024 * 1024);
+    const result = await _uploadSopForTest(
+      makeFormData(big, { title: "T", audience: "shared" }),
+      () => stub.client,
+      new Date("2026-05-08T14:32:11Z")
+    );
+    expect(result.ok).toBe(false);
+    expect(stub.calls.uploadPaths).toEqual([]);
+  });
+
+  test("PDF upload: stores one file and calls record_sop_upload RPC", async () => {
+    const stub = makeStubSupabase();
+    const result = await _uploadSopForTest(
+      makeFormData(pdfFile(), { title: "Boarding", audience: "shared" }),
+      () => stub.client,
+      new Date("2026-05-08T14:32:11Z")
+    );
+    expect(result.ok).toBe(true);
+    expect(stub.calls.uploadPaths).toHaveLength(1);
+    expect(stub.calls.uploadPaths[0]).toMatch(
+      /^[0-9a-f-]+\/20260508T143211Z\/original\.pdf$/
+    );
+    expect(stub.calls.rpc).toHaveLength(1);
+    expect(stub.calls.rpc[0].name).toBe("record_sop_upload");
+    const args = stub.calls.rpc[0].args;
+    expect(args.p_title).toBe("Boarding");
+    expect(args.p_audience).toBe("shared");
+    expect(args.p_actor_id).toBe("mgr-1");
+    expect(args.p_storage_path_pdf).toBe(args.p_storage_path_original);
+  });
+
+  test("rolls back the storage upload when the RPC fails", async () => {
+    const stub = makeStubSupabase({
+      rpcResult: { error: { message: "rpc exploded" } },
+    });
+    const result = await _uploadSopForTest(
+      makeFormData(pdfFile(), { title: "Boarding", audience: "shared" }),
+      () => stub.client,
+      new Date("2026-05-08T14:32:11Z")
+    );
+    expect(result.ok).toBe(false);
+    expect(stub.calls.uploadPaths).toHaveLength(1);
+    expect(stub.calls.removedPaths).toEqual(stub.calls.uploadPaths);
+  });
+});
