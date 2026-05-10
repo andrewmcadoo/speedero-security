@@ -3,11 +3,16 @@
 // the SOP upload action when the manager uploads a DOCX.
 //
 // Requires `soffice` on PATH on the runtime host (see docs/CLIPPER.md).
+// Passes -env:UserInstallation pointing into the per-call temp dir so
+// LibreOffice doesn't try to write its user profile under $HOME — that
+// path is read-only when the app runs under a hardened systemd unit
+// (ProtectHome=read-only).
 
 import { spawn as nodeSpawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 export class DocxConversionError extends Error {
   constructor(message: string, public readonly cause?: unknown) {
@@ -54,9 +59,18 @@ function runSoffice(
   timeoutMs: number
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    const profileUrl = pathToFileURL(join(workDir, "uno-profile")).href;
     const child = spawn(
       "soffice",
-      ["--headless", "--convert-to", "pdf", "--outdir", workDir, inputPath],
+      [
+        "--headless",
+        `-env:UserInstallation=${profileUrl}`,
+        "--convert-to",
+        "pdf",
+        "--outdir",
+        workDir,
+        inputPath,
+      ],
       { stdio: ["ignore", "pipe", "pipe"] }
     );
 

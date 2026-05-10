@@ -41,12 +41,16 @@ function fakeChild(opts: {
 describe("convertDocxToPdf", () => {
   test("returns the PDF bytes that LibreOffice writes to outdir", async () => {
     let capturedOutdir: string | null = null;
+    let capturedProfileArg: string | null = null;
 
     const result = await convertDocxToPdf(Buffer.from("fake docx bytes"), {
       spawn: ((_cmd: string, args: string[]) => {
-        // args = [--headless, --convert-to, pdf, --outdir, <dir>, <input>]
-        capturedOutdir = args[4];
-        const inputPath = args[5];
+        // args = [--headless, -env:UserInstallation=..., --convert-to, pdf,
+        //         --outdir, <dir>, <input>]
+        capturedProfileArg = args[1];
+        const outdirIdx = args.indexOf("--outdir");
+        capturedOutdir = args[outdirIdx + 1];
+        const inputPath = args[outdirIdx + 2];
         const outputPath = inputPath.replace(/\.docx$/, ".pdf");
         const fake = fakeChild({ noEvents: true });
         // Simulate soffice writing the output PDF, then exit.
@@ -60,6 +64,7 @@ describe("convertDocxToPdf", () => {
 
     expect(result.toString()).toBe("PDF bytes");
     expect(capturedOutdir).not.toBeNull();
+    expect(capturedProfileArg).toMatch(/^-env:UserInstallation=file:\/\//);
   });
 
   test("rejects with DocxConversionError on non-zero exit", async () => {
