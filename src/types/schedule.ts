@@ -83,6 +83,7 @@ export interface Transition {
   startsAt: string;  // ISO 8601 with offset, e.g. "2026-04-30T09:30:00-07:00"
   tz: string;        // event's IANA timezone, e.g. "America/Los_Angeles"
   eventId: string;   // Google Calendar event id (instance id for recurring) — React key
+  location?: string; // event location, appended after title with " - " when present
 }
 
 export interface CardSnapshot {

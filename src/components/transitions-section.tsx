@@ -38,7 +38,9 @@ export function TransitionsSection({ transitions }: TransitionsSectionProps) {
                   <span className="shrink-0 font-mono text-[11px] text-gray-400">
                     {formatTimeInTz(t.startsAt, t.tz)}
                   </span>
-                  <span className="text-xs text-gray-100">{t.title}</span>
+                  <span className="text-xs text-gray-100">
+                    {t.location ? `${t.title} - ${t.location}` : t.title}
+                  </span>
                 </li>
               ))}
             </ul>

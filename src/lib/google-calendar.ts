@@ -22,6 +22,7 @@ export function stripTransitionPrefix(title: string): string | null {
 export interface CalendarApiEvent {
   id?: string;
   summary?: string;
+  location?: string;
   start?: {
     date?: string;       // YYYY-MM-DD for all-day events
     dateTime?: string;   // RFC3339 for timed events
@@ -47,12 +48,14 @@ export function parseCalendarEvents(
     if (!startsAt) continue; // all-day or malformed
     const title = stripTransitionPrefix(event.summary);
     if (title === null) continue;
+    const location = event.location?.trim();
     transitions.push({
       person,
       title,
       startsAt,
       tz: event.start?.timeZone ?? "UTC",
       eventId: event.id,
+      location: location ? location : undefined,
     });
   }
   return transitions;

@@ -117,6 +117,34 @@ describe("parseCalendarEvents", () => {
     ]);
     expect(result).toEqual([]);
   });
+
+  test("captures a non-empty location", () => {
+    const result = parseCalendarEvents("greg", [
+      baseEvent({ id: "evt_loc", summary: "TT: Drive to LA", location: "Las Vegas, NV" }),
+    ]);
+    expect(result[0].location).toBe("Las Vegas, NV");
+  });
+
+  test("location is undefined when absent", () => {
+    const result = parseCalendarEvents("greg", [
+      baseEvent({ id: "evt_noloc", summary: "TT: Drive to LA" }),
+    ]);
+    expect(result[0].location).toBeUndefined();
+  });
+
+  test("whitespace-only location collapses to undefined", () => {
+    const result = parseCalendarEvents("greg", [
+      baseEvent({ id: "evt_blankloc", summary: "TT: Drive to LA", location: "   " }),
+    ]);
+    expect(result[0].location).toBeUndefined();
+  });
+
+  test("trims surrounding whitespace from location", () => {
+    const result = parseCalendarEvents("greg", [
+      baseEvent({ id: "evt_trimloc", summary: "TT: Drive to LA", location: "  Las Vegas, NV  " }),
+    ]);
+    expect(result[0].location).toBe("Las Vegas, NV");
+  });
 });
 
 describe("getConfiguredPrincipals", () => {
