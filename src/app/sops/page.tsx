@@ -13,8 +13,11 @@ export default async function SopsPage() {
   const sops = await getSops(supabase);
 
   // Resolve uploader display names. RLS lets EPOs read management profiles
-  // by id, so this works for both roles.
-  const uploaderIds = Array.from(new Set(sops.map((s) => s.uploadedBy)));
+  // by id, so this works for both roles. uploadedBy is nullable when the
+  // uploader has been deleted; skip those rows here.
+  const uploaderIds = Array.from(
+    new Set(sops.map((s) => s.uploadedBy).filter((id): id is string => id !== null))
+  );
   const uploaders =
     uploaderIds.length === 0
       ? []

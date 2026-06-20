@@ -57,7 +57,9 @@ export function SopAuditTable({ entries, signedUrlByPath }: Props) {
                   {new Date(e.occurredAt).toLocaleString()}
                 </td>
                 <td className="px-3 py-2 align-top text-xs">
-                  <span title={e.actorEmail}>{e.actorFullName || e.actorId}</span>
+                  <span title={e.actorEmailAtAction}>
+                    {e.actorFullNameAtAction || e.actorEmailAtAction || "Deleted user"}
+                  </span>
                 </td>
                 <td className="px-3 py-2 align-top">
                   <span

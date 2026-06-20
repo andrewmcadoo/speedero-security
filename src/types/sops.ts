@@ -16,7 +16,7 @@ export interface Sop {
   originalFilename: string;
   originalMimeType: string;
   fileSizeBytes: number;
-  uploadedBy: string;
+  uploadedBy: string | null;
   uploadedAt: string;
   updatedAt: string;
 }
@@ -31,11 +31,17 @@ export type SopAuditAction =
 export interface SopAuditLogEntry {
   id: string;
   occurredAt: string;
-  actorId: string;
+  actorId: string | null;
   sopId: string;
   action: SopAuditAction;
   titleAtAction: string;
   audienceAtAction: SopAudience;
+
+  // Snapshot of the actor's identity at the time of the action. Always
+  // present even if the user has since been deleted — these are the
+  // authoritative source for display.
+  actorEmailAtAction: string;
+  actorFullNameAtAction: string;
 
   newStoragePath: string | null;
   newFilename: string | null;
@@ -51,12 +57,9 @@ export interface SopAuditLogEntry {
   prevAudience: SopAudience | null;
 }
 
-// View-model variant including the actor's display name, used by the audit
-// table component so it doesn't have to re-resolve names per row.
-export interface SopAuditLogEntryWithActor extends SopAuditLogEntry {
-  actorFullName: string;
-  actorEmail: string;
-}
+// Alias retained for callers that previously distinguished the
+// view-model variant; actor identity now lives on the base entry.
+export type SopAuditLogEntryWithActor = SopAuditLogEntry;
 
 export const PDF_MIME = "application/pdf";
 export const DOCX_MIME =

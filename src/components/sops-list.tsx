@@ -71,7 +71,9 @@ export function SopsList({
               key={sop.id}
               sop={sop}
               isManagement={isManagement}
-              uploaderName={uploadersById[sop.uploadedBy] ?? ""}
+              uploaderName={
+                sop.uploadedBy ? (uploadersById[sop.uploadedBy] ?? "") : "Deleted user"
+              }
               onEdit={onRequestEdit}
               onDelete={onRequestDelete}
             />

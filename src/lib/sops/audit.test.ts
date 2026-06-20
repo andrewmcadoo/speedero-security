@@ -12,6 +12,8 @@ function makeEntry(overrides: Partial<SopAuditLogEntry>): SopAuditLogEntry {
     action: "upload",
     titleAtAction: "Boarding Procedure",
     audienceAtAction: "shared",
+    actorEmailAtAction: "actor@test",
+    actorFullNameAtAction: "Test Actor",
     newStoragePath: null,
     newFilename: null,
     newMimeType: null,

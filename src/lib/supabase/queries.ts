@@ -206,7 +206,7 @@ interface SopRow {
   original_filename: string;
   original_mime_type: string;
   file_size_bytes: number;
-  uploaded_by: string;
+  uploaded_by: string | null;
   uploaded_at: string;
   updated_at: string;
 }
@@ -265,11 +265,13 @@ export async function getSopById(
 interface AuditRow {
   id: string;
   occurred_at: string;
-  actor_id: string;
+  actor_id: string | null;
   sop_id: string;
   action: SopAuditLogEntryWithActor["action"];
   title_at_action: string;
   audience_at_action: SopAudience;
+  actor_email_at_action: string;
+  actor_full_name_at_action: string;
   new_storage_path: string | null;
   new_filename: string | null;
   new_mime_type: string | null;
@@ -280,7 +282,6 @@ interface AuditRow {
   prev_description: string | null;
   next_description: string | null;
   prev_audience: SopAudience | null;
-  actor: { full_name: string | null; email: string } | null;
 }
 
 function toAudit(row: AuditRow): SopAuditLogEntryWithActor {
@@ -292,6 +293,8 @@ function toAudit(row: AuditRow): SopAuditLogEntryWithActor {
     action: row.action,
     titleAtAction: row.title_at_action,
     audienceAtAction: row.audience_at_action,
+    actorEmailAtAction: row.actor_email_at_action,
+    actorFullNameAtAction: row.actor_full_name_at_action,
     newStoragePath: row.new_storage_path,
     newFilename: row.new_filename,
     newMimeType: row.new_mime_type,
@@ -302,8 +305,6 @@ function toAudit(row: AuditRow): SopAuditLogEntryWithActor {
     prevDescription: row.prev_description,
     nextDescription: row.next_description,
     prevAudience: row.prev_audience,
-    actorFullName: row.actor?.full_name ?? "",
-    actorEmail: row.actor?.email ?? "",
   };
 }
 
@@ -327,10 +328,7 @@ export async function getSopAuditLog(
 
   let query = supabase
     .from("sop_audit_log")
-    .select(
-      "*, actor:actor_id(full_name, email)",
-      { count: "exact" }
-    )
+    .select("*", { count: "exact" })
     .order("occurred_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
