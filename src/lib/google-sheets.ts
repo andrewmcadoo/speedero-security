@@ -105,6 +105,19 @@ function isGreenBackground(
   return g > 0.5 && r < 0.85 && g > r && g > b;
 }
 
+/** Check if a cell has any non-white background fill (any shading). */
+export function isShaded(
+  cellData: sheets_v4.Schema$CellData | undefined
+): boolean {
+  const bg = cellData?.effectiveFormat?.backgroundColor;
+  if (!bg) return false;
+  const r = bg.red ?? 0;
+  const g = bg.green ?? 0;
+  const b = bg.blue ?? 0;
+  // Any fill that isn't white (the default "no fill") counts as shaded.
+  return !(r >= 1 && g >= 1 && b >= 1);
+}
+
 /** Check if a cell's background color is yellow/orange. */
 function isYellowBackground(
   cellData: sheets_v4.Schema$CellData | undefined
@@ -147,7 +160,7 @@ function rowDataToEntry(
     date,
     dayOfWeek: cellValue(cells[COL.DAY]),
     confirmationStatus: parseConfirmation(cells[COL.CONFIRMED]),
-    teakNight: isGreenBackground(cells[COL.TEAK_NIGHT]),
+    teakNight: isShaded(cells[COL.TEAK_NIGHT]),
     activity: cellValue(cells[COL.ACTIVITY]),
     location: cellValue(cells[COL.NIGHT_LOCATION]),
     coPilot: cellValue(cells[COL.CO_PILOT]),
