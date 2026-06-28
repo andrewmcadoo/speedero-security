@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getAnchorDates } from "@/lib/schedule-utils";
 import { runSnapshotForCron } from "@/lib/snapshot/freeze";
 
@@ -20,7 +20,10 @@ export async function POST(request: Request) {
   }
 
   try {
-    const supabase = await createClient();
+    // Service-role client: this is an unattended cron with no user session, so
+    // the anon+cookie client would fail the is_management() RLS check on
+    // card_snapshots inserts. Route is already gated by SNAPSHOT_CRON_TOKEN.
+    const supabase = createAdminClient();
     const { today } = getAnchorDates();
     const result = await runSnapshotForCron(supabase, today);
     console.log(

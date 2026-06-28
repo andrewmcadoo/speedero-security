@@ -18,6 +18,14 @@ export interface AssembleSources {
   assignmentsByDate: Map<string, Pick<Profile, "id" | "fullName" | "email">[]>;
   travelLegsByDate: Map<string, DateLegs>;
   settingsMap: Map<string, { detailLevel: DetailLevel }>;
+  /**
+   * Durable fallback for schedule rows that have been deleted from the live
+   * sheet. Keyed by date. Used only when the live `schedule` has no row for a
+   * date, so a past card can still be assembled (and frozen) after its sheet
+   * row is gone. Absent in the live forward-view path, so deleted future rows
+   * stay hidden going forward.
+   */
+  mirrorByDate?: Map<string, ScheduleEntry>;
 }
 
 /**
@@ -34,7 +42,12 @@ export function assembleDashboardEntry(
   date: string,
   sources: AssembleSources
 ): DashboardEntry | null {
-  const row = sources.schedule.find((s) => s.date === date);
+  // Prefer the live sheet row; fall back to the durable mirror when the row
+  // has been deleted from the sheet. The mirror is only populated for past
+  // dates, so the live forward view is unaffected by deleted future rows.
+  const row =
+    sources.schedule.find((s) => s.date === date) ??
+    sources.mirrorByDate?.get(date);
   if (!row) return null;
   const setting = sources.settingsMap.get(date);
   const legs = sources.travelLegsByDate.get(date);

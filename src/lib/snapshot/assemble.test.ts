@@ -54,6 +54,38 @@ describe("assembleDashboardEntry", () => {
     expect(entry!.dropoffLeg).toBeUndefined();
   });
 
+  test("falls back to mirrorByDate when the live sheet row is gone", () => {
+    // Simulates a sheet row deleted before its card was ever frozen: the live
+    // `schedule` no longer has it, but the durable mirror does.
+    const entry = assembleDashboardEntry("2026-04-28", {
+      schedule: [], // deleted from the sheet
+      transitionsByDate: new Map(),
+      assignmentsByDate: new Map([
+        ["2026-04-28", [{ id: "u1", fullName: "Alice", email: "a@x" }]],
+      ]),
+      travelLegsByDate: new Map(),
+      settingsMap: new Map(),
+      mirrorByDate: new Map([["2026-04-28", baseEntry("2026-04-28")]]),
+    });
+    expect(entry).not.toBeNull();
+    expect(entry!.activity).toBe("Studio");
+    expect(entry!.assignedEpos).toHaveLength(1);
+  });
+
+  test("prefers the live row over the mirror when both exist", () => {
+    const live = { ...baseEntry("2026-04-28"), activity: "Live activity" };
+    const stale = { ...baseEntry("2026-04-28"), activity: "Stale mirror" };
+    const entry = assembleDashboardEntry("2026-04-28", {
+      schedule: [live],
+      transitionsByDate: new Map(),
+      assignmentsByDate: new Map(),
+      travelLegsByDate: new Map(),
+      settingsMap: new Map(),
+      mirrorByDate: new Map([["2026-04-28", stale]]),
+    });
+    expect(entry!.activity).toBe("Live activity");
+  });
+
   test("uses 'single' as the default detail level", () => {
     const entry = assembleDashboardEntry("2026-04-28", {
       schedule: [baseEntry("2026-04-28")],

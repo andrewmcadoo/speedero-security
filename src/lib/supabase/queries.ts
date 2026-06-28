@@ -1,5 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { CardSnapshot, DashboardEntry, Profile } from "@/types/schedule";
+import type {
+  CardSnapshot,
+  DashboardEntry,
+  Profile,
+  ScheduleEntry,
+} from "@/types/schedule";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type {
   Sop,
   SopAudience,
@@ -192,6 +198,62 @@ export async function upsertSnapshot(
     return false;
   }
   return true;
+}
+
+// ---- Schedule row mirror ----
+
+/**
+ * Durably mirror the latest-seen sheet rows into `schedule_rows`, keyed by
+ * date. Best-effort and never throws: a failed mirror write must not block a
+ * dashboard render or a cron run. Uses the service-role client so it works
+ * regardless of the caller's role (EPO dashboard loads included) and bypasses
+ * RLS. Rows that vanish from the sheet are intentionally NOT deleted here —
+ * that durability is the whole point of the table.
+ */
+export async function upsertScheduleRows(
+  entries: ScheduleEntry[]
+): Promise<void> {
+  if (entries.length === 0) return;
+  let admin: SupabaseClient;
+  try {
+    admin = createAdminClient();
+  } catch (err) {
+    console.error("upsertScheduleRows: admin client unavailable:", err);
+    return;
+  }
+  const now = new Date().toISOString();
+  const rows = entries.map((e) => ({
+    date: e.date,
+    row_id: e.rowId,
+    payload: e,
+    last_seen_at: now,
+  }));
+  const { error } = await admin
+    .from("schedule_rows")
+    .upsert(rows, { onConflict: "date" });
+  if (error) {
+    console.error("upsertScheduleRows failed:", error.message, error.code);
+  }
+}
+
+/**
+ * Read mirrored schedule rows with `date < before`, returning each row's
+ * last-seen ScheduleEntry payload. Used by the freeze/backfill path to assemble
+ * a past card whose live sheet row has since been deleted. Returns [] on error.
+ */
+export async function getScheduleRows(
+  supabase: SupabaseClient,
+  before: string
+): Promise<ScheduleEntry[]> {
+  const { data, error } = await supabase
+    .from("schedule_rows")
+    .select("payload")
+    .lt("date", before);
+  if (error) {
+    console.error("getScheduleRows failed:", error.message);
+    return [];
+  }
+  return (data ?? []).map((r) => (r as { payload: ScheduleEntry }).payload);
 }
 
 // ---- SOPs ----

@@ -5,8 +5,10 @@ import { fetchTransitions } from "@/lib/google-calendar";
 import {
   getAllAssignmentsWithProfiles,
   getDateSettings,
+  getScheduleRows,
   getSnapshotDates,
   getTravelLegs,
+  upsertScheduleRows,
   upsertSnapshot,
 } from "@/lib/supabase/queries";
 import {
@@ -139,15 +141,30 @@ export async function fetchAllLiveSources(
   supabase: SupabaseClient,
   today: string
 ): Promise<AssembleSources> {
-  const [schedule, dateSettingsRows, assignmentsRaw, travelLegsRaw] =
+  const [schedule, dateSettingsRows, assignmentsRaw, travelLegsRaw, mirrorRows] =
     await fetchWithRetry(() =>
       Promise.all([
         fetchSchedule(),
         getDateSettings(supabase),
         getAllAssignmentsWithProfiles(supabase),
         getTravelLegs(supabase),
+        // Past mirror rows (date < today) as a fallback for sheet rows that
+        // have since been deleted. Reads tolerate failure (returns []).
+        getScheduleRows(supabase, today),
       ])
     );
+
+  // Durably mirror the rows we just read so a later sheet deletion can't
+  // destroy this content. Best-effort: never blocks assembly.
+  await upsertScheduleRows(schedule);
+
+  // Build the deleted-row fallback map. Only keep mirrored dates the live sheet
+  // no longer has, so a present live row always wins.
+  const liveDates = new Set(schedule.map((s) => s.date));
+  const mirrorByDate = new Map<string, ScheduleEntry>();
+  for (const row of mirrorRows) {
+    if (!liveDates.has(row.date)) mirrorByDate.set(row.date, row);
+  }
 
   // Transitions need a date range. Cover today-7 through whatever the
   // furthest sheet date is.
@@ -240,6 +257,7 @@ export async function fetchAllLiveSources(
     assignmentsByDate,
     travelLegsByDate,
     settingsMap,
+    mirrorByDate,
   };
   return sources;
 }
