@@ -25,8 +25,6 @@ const COL = {
   ROW_ID: 18,
 } as const;
 
-const HEADER_ROWS = 2; // Sheet has a 2-row header
-
 function getAuth() {
   return new GoogleAuth({
     credentials: {
@@ -183,6 +181,27 @@ function rowDataToEntry(
   };
 }
 
+/**
+ * Convert raw sheet rows into ScheduleEntry objects.
+ *
+ * We deliberately do NOT skip a fixed number of header rows. `rowDataToEntry`
+ * already returns null for any row lacking a valid "Mon-DD" date AND a ROW_ID,
+ * which filters out header rows no matter how many there are. A hardcoded
+ * header count is fragile: the sheet originally had a 2-row header, was later
+ * reduced to 1, and the old fixed skip (HEADER_ROWS = 2) then silently ate the
+ * first real data row — which, since past rows are pruned, is today's card.
+ */
+export function parseScheduleRows(
+  rows: sheets_v4.Schema$RowData[]
+): ScheduleEntry[] {
+  const entries: ScheduleEntry[] = [];
+  for (const row of rows) {
+    const entry = rowDataToEntry(row);
+    if (entry) entries.push(entry);
+  }
+  return entries;
+}
+
 export async function fetchSchedule(): Promise<ScheduleEntry[]> {
   const auth = getAuth();
   const accessToken = await auth.getAccessToken();
@@ -216,12 +235,5 @@ export async function fetchSchedule(): Promise<ScheduleEntry[]> {
   const sheetData = data.sheets?.[0]?.data?.[0];
   if (!sheetData?.rowData) return [];
 
-  const rows = sheetData.rowData;
-  const entries: ScheduleEntry[] = [];
-  for (let i = HEADER_ROWS; i < rows.length; i++) {
-    const entry = rowDataToEntry(rows[i]);
-    if (entry) entries.push(entry);
-  }
-
-  return entries;
+  return parseScheduleRows(sheetData.rowData);
 }
