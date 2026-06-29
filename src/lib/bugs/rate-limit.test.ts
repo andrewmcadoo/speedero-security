@@ -16,6 +16,7 @@ describe("createRateLimiter", () => {
     for (let i = 0; i < 5; i++) limiter.check("aj@example.com");
     const result = limiter.check("aj@example.com");
     expect(result.allowed).toBe(false);
+    if (result.allowed) throw new Error("expected a rate-limit rejection");
     expect(result.retryAfterMs).toBeGreaterThan(0);
   });
 
@@ -43,6 +44,7 @@ describe("createRateLimiter", () => {
     current = 500;
     const result = limiter.check("aj@example.com");
     expect(result.allowed).toBe(false);
+    if (result.allowed) throw new Error("expected a rate-limit rejection");
     // oldest timestamp is 0, window 1000, now 500 → retry in 500ms
     expect(result.retryAfterMs).toBe(500);
   });
