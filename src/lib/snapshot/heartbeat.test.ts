@@ -53,6 +53,27 @@ describe("assessHeartbeatStaleness", () => {
     expect(r.ageHours).toBeNull();
   });
 
+  test("an unparseable timestamp is stale with null ageHours (no false-fresh)", () => {
+    const r = assessHeartbeatStaleness({
+      lastSuccessAt: "not-a-date",
+      now,
+      thresholdHours: WATCHDOG_MAX_AGE_HOURS,
+    });
+    expect(r.stale).toBe(true);
+    expect(r.ageHours).toBeNull();
+  });
+
+  test("a future heartbeat (clock skew) clamps to age 0 and is fresh", () => {
+    const lastSuccessAt = new Date(now.getTime() + 3_600_000).toISOString(); // 1h ahead
+    const r = assessHeartbeatStaleness({
+      lastSuccessAt,
+      now,
+      thresholdHours: WATCHDOG_MAX_AGE_HOURS,
+    });
+    expect(r.stale).toBe(false);
+    expect(r.ageHours).toBe(0);
+  });
+
   test("age math: 30h ago against a fixed now yields ageHours ≈ 30", () => {
     const lastSuccessAt = new Date("2026-06-28T06:00:00.000Z").toISOString(); // 30h before now
     const r = assessHeartbeatStaleness({

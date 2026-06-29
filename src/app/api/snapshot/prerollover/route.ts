@@ -2,20 +2,20 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAnchorDates } from "@/lib/schedule-utils";
 import { runPreRolloverSnapshot } from "@/lib/snapshot/freeze";
+import { checkCronAuth } from "@/lib/snapshot/cron-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const expected = process.env.SNAPSHOT_CRON_TOKEN;
-  if (!expected) {
+  const authResult = checkCronAuth(request);
+  if (authResult === "not-configured") {
     return NextResponse.json(
       { error: "Snapshot endpoint not configured" },
       { status: 503 }
     );
   }
-  const auth = request.headers.get("authorization") ?? "";
-  if (auth !== `Bearer ${expected}`) {
+  if (authResult === "unauthorized") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[snapshot/prerollover] failed:", error);
     return NextResponse.json(
-      { error: "Pre-rollover snapshot failed", detail: String(error) },
+      { error: "Pre-rollover snapshot failed" },
       { status: 500 }
     );
   }
