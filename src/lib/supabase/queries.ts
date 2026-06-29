@@ -248,6 +248,42 @@ export async function upsertScheduleRows(
 }
 
 /**
+ * Liveness heartbeat for an unattended cron. Upserts `last_success_at = now()`
+ * for `name` into cron_heartbeats via the caller-supplied client (admin/service
+ * role bypasses RLS). A write failure is logged and swallowed — recording
+ * liveness must never break the run it is observing.
+ */
+export async function recordCronHeartbeat(
+  supabase: SupabaseClient,
+  name: string
+): Promise<void> {
+  const { error } = await supabase
+    .from("cron_heartbeats")
+    .upsert(
+      { name, last_success_at: new Date().toISOString() },
+      { onConflict: "name" }
+    );
+  if (error) console.error("recordCronHeartbeat failed:", error.message);
+}
+
+/**
+ * Read the `last_success_at` for a named heartbeat, or `null` if there is no
+ * row or the query errors. The watchdog treats `null` as stale.
+ */
+export async function getCronHeartbeat(
+  supabase: SupabaseClient,
+  name: string
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("cron_heartbeats")
+    .select("last_success_at")
+    .eq("name", name)
+    .maybeSingle();
+  if (error || !data) return null;
+  return (data as { last_success_at: string }).last_success_at;
+}
+
+/**
  * Read mirrored schedule rows with `date < before`, returning each row's
  * last-seen ScheduleEntry payload. Used by the freeze/backfill path to assemble
  * a past card whose live sheet row has since been deleted. Returns [] on error.

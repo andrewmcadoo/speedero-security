@@ -162,3 +162,54 @@ sudo sed -i "s/^SNAPSHOT_CRON_TOKEN=.*/SNAPSHOT_CRON_TOKEN=$new_token/" /data/Se
 sudo systemctl restart speedero-security
 # Both timers will pick up the new token on their next fire; no restart needed for the timers themselves.
 ```
+
+## Capture watchdog (dead-man's switch)
+
+The nightly reconcile records a liveness heartbeat (`cron_heartbeats`,
+`name='snapshot-run'`) on every successful run. An independent watchdog timer
+fires every 6h, reads the heartbeat, and emails `SNAPSHOT_ALERT_EMAIL` via Resend
+if it is older than 26h (or missing). This closes the one gap the run-time
+capture-health alert cannot see: a cron that has **silently stopped executing**
+(timer disabled/removed, capture path throwing on every run).
+
+It does **not** cover the Next process being down or total box death — the
+watchdog lives inside the app it monitors. Point an external uptime monitor
+(e.g. healthchecks.io, UptimeRobot) at a SecApp route to cover that class.
+
+### Install
+
+1. Apply the migration so the heartbeat table exists and is seeded:
+
+   ```bash
+   # Apply supabase/migrations/016_cron_heartbeats.sql to Supabase
+   # (creates cron_heartbeats + seeds 'snapshot-run' with now()).
+   ```
+
+2. Confirm the alert env is present in `/data/SecApp/shared/.env.production`
+   (already set as of 2026-06-29): `SNAPSHOT_ALERT_EMAIL`, `RESEND_API_KEY`,
+   `RESEND_FROM_ADDRESS`, `SNAPSHOT_CRON_TOKEN`.
+
+3. Install the watchdog timer + service unit pair:
+
+   ```bash
+   sudo cp /data/SecApp/current/scripts/deploy/speedero-snapshot-watchdog.service /etc/systemd/system/
+   sudo cp /data/SecApp/current/scripts/deploy/speedero-snapshot-watchdog.timer /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now speedero-snapshot-watchdog.timer
+   ```
+
+4. Sanity-check:
+
+   ```bash
+   systemctl list-timers 'speedero-*'                         # watchdog timer shows a next run
+   sudo systemctl start speedero-snapshot-watchdog.service     # fire once, immediately
+   sudo journalctl -u speedero-snapshot-watchdog --since "5 min ago"
+   ```
+
+   A fresh heartbeat returns `{"stale":false,...}` and sends no email. To verify
+   the alarm path, set `cron_heartbeats.last_success_at` for `'snapshot-run'` to
+   ~30h ago, fire the service, and confirm a `STALE` journal line + alert email;
+   then let the next nightly run reset it.
+
+The watchdog service loads the same `/data/SecApp/shared/.env.production`, so the
+token-rotation steps above cover it too.
