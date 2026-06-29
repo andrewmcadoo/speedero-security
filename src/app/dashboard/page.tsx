@@ -94,12 +94,7 @@ export default async function DashboardPage({
     const requestedPast = datesBetween(pastStart, pastEnd);
     const missing = requestedPast.filter((d) => !have.has(d));
     if (missing.length > 0) {
-      const result = await runSnapshotForDates(
-        supabase,
-        missing,
-        liveSources,
-        "lazy"
-      );
+      const result = await runSnapshotForDates(missing, liveSources, "lazy");
       if (result.snapshotted.length > 0) {
         const fresh = await getSnapshotsBetween(supabase, pastStart, pastEnd);
         backfilled = fresh.filter((s) => !have.has(s.date));
@@ -157,7 +152,26 @@ export default async function DashboardPage({
     pastStart !== null && pastEnd !== null
       ? datesBetween(pastStart, pastEnd)
           .filter((d) => !haveDates.has(d))
-          .map((d) => emptyMissingEntry(d))
+          .map((d) => {
+            // Last-resort display: if the durable mirror has this date (assemble
+            // falls back to it) render the recovered card rather than a bare "?".
+            // Covers the case where the lazy freeze above couldn't persist (e.g.
+            // admin client unavailable or a read-after-write lag). A genuine gap
+            // (no mirror, no live row) still renders the "?" placeholder.
+            const recovered = liveSources
+              ? assembleDashboardEntry(d, liveSources)
+              : null;
+            if (recovered) {
+              return {
+                ...recovered,
+                isPast: true,
+                isFromSnapshot: true,
+                isThisWeek: isThisWeek(d),
+                isNextWeek: isNextWeek(d),
+              };
+            }
+            return emptyMissingEntry(d);
+          })
       : [];
 
   const entries = [...pastEntries, ...missingPast, ...liveEntries].sort((a, b) =>

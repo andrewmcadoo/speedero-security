@@ -179,12 +179,23 @@ export async function getSnapshotsBetween(
 /**
  * Insert a snapshot. Never overwrites — if a snapshot for `date` already
  * exists, this is a no-op (returns false). Returns true on insert.
+ *
+ * Writes through the service-role admin client (bypasses RLS): freezing a card
+ * is system bookkeeping, and gating it on the viewer's role meant EPO-triggered
+ * lazy backfills silently failed `is_management()` and never persisted. Now any
+ * viewer's first load of a past date durably freezes it.
  */
 export async function upsertSnapshot(
-  supabase: SupabaseClient,
   args: { date: string; payload: DashboardEntry; frozenBy: "cron" | "lazy" | "manual" }
 ): Promise<boolean> {
-  const { error } = await supabase
+  let admin: SupabaseClient;
+  try {
+    admin = createAdminClient();
+  } catch (err) {
+    console.error("upsertSnapshot: admin client unavailable:", err);
+    return false;
+  }
+  const { error } = await admin
     .from("card_snapshots")
     .insert({
       date: args.date,

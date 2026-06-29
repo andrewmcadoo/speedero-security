@@ -67,12 +67,17 @@ export interface RunSnapshotResult {
   snapshotted: string[];
   unrecoverable: string[];
   alreadyFrozen: string[];
+  /** Rows returned by the live sheet fetch this run (reconciler only). 0 = sheet sync broken. */
+  liveScheduleCount?: number;
 }
 
 /**
  * Capture missing snapshots in [today-7, today-1].
- * Used by both the nightly cron endpoint and (with a different `dates`
- * computation) the lazy backfill in the dashboard read path.
+ *
+ * NOTE: the nightly cron route now calls `runMirrorReconcile`, which is a
+ * superset (freezes every unfrozen past date the mirror/live sheet has, not just
+ * the last 7 days). This 7-day variant is retained for its focused window and is
+ * covered by `selectMissingDatesForCron` tests.
  */
 export async function runSnapshotForCron(
   supabase: SupabaseClient,
@@ -95,7 +100,7 @@ export async function runSnapshotForCron(
 
   const sources = await fetchAllLiveSources(supabase, today);
 
-  return runSnapshotForDates(supabase, missing, sources, "cron", existing);
+  return runSnapshotForDates(missing, sources, "cron", existing);
 }
 
 /**
@@ -104,7 +109,6 @@ export async function runSnapshotForCron(
  * the sheet per request.
  */
 export async function runSnapshotForDates(
-  supabase: SupabaseClient,
   dates: string[],
   sources: AssembleSources,
   frozenBy: "cron" | "lazy",
@@ -121,15 +125,89 @@ export async function runSnapshotForDates(
       result.unrecoverable.push(date);
       continue;
     }
-    const inserted = await upsertSnapshot(supabase, {
-      date,
-      payload: entry,
-      frozenBy,
-    });
+    const inserted = await upsertSnapshot({ date, payload: entry, frozenBy });
     if (inserted) result.snapshotted.push(date);
     else result.unrecoverable.push(date); // already exists or insert failed
   }
   return result;
+}
+
+/**
+ * Pure: every past date (< today) we have content for — from the durable mirror
+ * (deleted-from-sheet rows) or the live sheet — that is NOT already frozen.
+ * The basis of the full-range reconciler; tested independently of I/O.
+ */
+export function selectUnfrozenPastDates(
+  today: string,
+  mirrorDates: string[],
+  liveScheduleDates: string[],
+  existing: Set<string>
+): string[] {
+  const past = new Set<string>();
+  for (const d of mirrorDates) if (d < today) past.add(d);
+  for (const d of liveScheduleDates) if (d < today) past.add(d);
+  return Array.from(past)
+    .filter((d) => !existing.has(d))
+    .sort();
+}
+
+/**
+ * Pure: turn a finished cron run into a list of human-readable health issues.
+ * Empty list = healthy. Used to drive the capture alert (Defect 3 / observability).
+ */
+export function assessCaptureHealth(args: {
+  liveScheduleCount: number;
+  unrecoverable: string[];
+}): string[] {
+  const issues: string[] = [];
+  if (args.liveScheduleCount === 0) {
+    issues.push(
+      "Google Sheet fetch returned 0 rows — sheet sync may be broken (API creds, " +
+        "network, or sheet structure changed). No new content is being captured."
+    );
+  }
+  if (args.unrecoverable.length > 0) {
+    issues.push(
+      `${args.unrecoverable.length} past date(s) could not be frozen into a ` +
+        `snapshot: ${args.unrecoverable.join(", ")}.`
+    );
+  }
+  return issues;
+}
+
+/**
+ * Full-range reconciler: freeze EVERY past date the mirror or live sheet has but
+ * `card_snapshots` lacks — not just the cron's fixed 7-day window. The mirror is
+ * the durable time capsule; this guarantees each captured day also becomes a
+ * durable snapshot, closing long-tail gaps (e.g. a day nobody browsed within a
+ * week). `liveScheduleCount` is surfaced so the caller can alert on an empty
+ * sheet fetch.
+ */
+export async function runMirrorReconcile(
+  supabase: SupabaseClient,
+  today: string
+): Promise<RunSnapshotResult> {
+  const sources = await fetchAllLiveSources(supabase, today);
+  const liveScheduleCount = sources.schedule.length;
+  const mirrorDates = Array.from(sources.mirrorByDate?.keys() ?? []);
+  const liveDates = sources.schedule.map((s) => s.date);
+
+  const candidates = selectUnfrozenPastDates(today, mirrorDates, liveDates, new Set());
+  if (candidates.length === 0) {
+    return { snapshotted: [], unrecoverable: [], alreadyFrozen: [], liveScheduleCount };
+  }
+  const existing = await getSnapshotDates(supabase, candidates);
+  const missing = candidates.filter((d) => !existing.has(d));
+  if (missing.length === 0) {
+    return {
+      snapshotted: [],
+      unrecoverable: [],
+      alreadyFrozen: Array.from(existing),
+      liveScheduleCount,
+    };
+  }
+  const result = await runSnapshotForDates(missing, sources, "cron", existing);
+  return { ...result, liveScheduleCount };
 }
 
 /**
@@ -280,5 +358,5 @@ export async function runPreRolloverSnapshot(
     return { snapshotted: [], unrecoverable: [], alreadyFrozen: [today] };
   }
   const sources = await fetchAllLiveSources(supabase, today);
-  return runSnapshotForDates(supabase, [today], sources, "cron", existing);
+  return runSnapshotForDates([today], sources, "cron", existing);
 }
