@@ -8,20 +8,20 @@ import {
 } from "@/lib/snapshot/heartbeat";
 import { buildWatchdogAlertEmail } from "@/lib/email/watchdog-alert";
 import { sendEmail } from "@/lib/email/resend";
+import { checkCronAuth } from "@/lib/snapshot/cron-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const expected = process.env.SNAPSHOT_CRON_TOKEN;
-  if (!expected) {
+  const authResult = checkCronAuth(request);
+  if (authResult === "not-configured") {
     return NextResponse.json(
       { error: "Watchdog not configured" },
       { status: 503 }
     );
   }
-  const auth = request.headers.get("authorization") ?? "";
-  if (auth !== `Bearer ${expected}`) {
+  if (authResult === "unauthorized") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[snapshot/watchdog] failed:", error);
     return NextResponse.json(
-      { error: "Watchdog failed", detail: String(error) },
+      { error: "Watchdog failed" },
       { status: 500 }
     );
   }

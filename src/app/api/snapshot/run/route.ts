@@ -6,20 +6,20 @@ import { buildCaptureAlertEmail } from "@/lib/email/capture-alert";
 import { sendEmail } from "@/lib/email/resend";
 import { recordCronHeartbeat } from "@/lib/supabase/queries";
 import { SNAPSHOT_RUN_HEARTBEAT } from "@/lib/snapshot/heartbeat";
+import { checkCronAuth } from "@/lib/snapshot/cron-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const expected = process.env.SNAPSHOT_CRON_TOKEN;
-  if (!expected) {
+  const authResult = checkCronAuth(request);
+  if (authResult === "not-configured") {
     return NextResponse.json(
       { error: "Snapshot endpoint not configured" },
       { status: 503 }
     );
   }
-  const auth = request.headers.get("authorization") ?? "";
-  if (auth !== `Bearer ${expected}`) {
+  if (authResult === "unauthorized") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -68,7 +68,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("[snapshot/run] failed:", error);
     return NextResponse.json(
-      { error: "Snapshot run failed", detail: String(error) },
+      { error: "Snapshot run failed" },
       { status: 500 }
     );
   }
