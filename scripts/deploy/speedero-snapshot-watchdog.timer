@@ -1,0 +1,9 @@
+[Unit]
+Description=Check that SecApp snapshot capture is still running
+
+[Timer]
+OnCalendar=*-*-* 00/6:00:00 America/Los_Angeles
+Persistent=true
+
+[Install]
+WantedBy=timers.target
