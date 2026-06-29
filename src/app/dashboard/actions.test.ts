@@ -35,6 +35,7 @@ describe("assignEpo guard", () => {
       now
     );
     expect(result.ok).toBe(false);
+    if (result.ok) throw new Error("expected a failure result");
     expect(result.error).toContain("2026-04-27");
     expect(called).toBe(false);
   });
@@ -58,7 +59,7 @@ describe("assignEpo guard", () => {
       now
     );
     expect(result.ok).toBe(true);
-    expect(inserted).toEqual({
+    expect(inserted as Record<string, unknown> | null).toEqual({
       date: "2026-04-28",
       epo_id: "epo-uuid",
       assigned_by: "mgr-uuid",
@@ -241,7 +242,7 @@ describe("travel-leg guards", () => {
       now
     );
     expect(result.ok).toBe(true);
-    expect(inserted).toEqual({
+    expect(inserted as Record<string, unknown> | null).toEqual({
       date: "2026-04-28",
       action: "Pick up",
       created_by: "mgr-uuid",
