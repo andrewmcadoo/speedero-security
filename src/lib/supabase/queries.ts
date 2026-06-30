@@ -303,6 +303,41 @@ export async function getScheduleRows(
   return (data ?? []).map((r) => (r as { payload: ScheduleEntry }).payload);
 }
 
+/**
+ * Dates (< before) present in the schedule_rows mirror. Used by the
+ * capture-completeness invariant — every such date should have a snapshot.
+ */
+export async function getMirrorDatesBefore(
+  supabase: SupabaseClient,
+  before: string
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("schedule_rows")
+    .select("date")
+    .lt("date", before);
+  if (error) {
+    console.error("getMirrorDatesBefore failed:", error.message);
+    return [];
+  }
+  return (data ?? []).map((r) => (r as { date: string }).date);
+}
+
+/** Dates (< before) that have a card_snapshots row. */
+export async function getSnapshotDatesBefore(
+  supabase: SupabaseClient,
+  before: string
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("card_snapshots")
+    .select("date")
+    .lt("date", before);
+  if (error) {
+    console.error("getSnapshotDatesBefore failed:", error.message);
+    return [];
+  }
+  return (data ?? []).map((r) => (r as { date: string }).date);
+}
+
 // ---- SOPs ----
 
 interface SopRow {

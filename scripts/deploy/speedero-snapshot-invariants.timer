@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily check that every mirrored past day has a snapshot
+
+[Timer]
+# 01:00 America/Los_Angeles — after the 00:30 reconcile has had its chance to
+# close gaps, so a hit means a day the reconcile genuinely failed to capture.
+OnCalendar=*-*-* 01:00:00 America/Los_Angeles
+Persistent=true
+
+[Install]
+WantedBy=timers.target
